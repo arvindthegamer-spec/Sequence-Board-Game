@@ -1,14 +1,17 @@
 package com.ferhatozcelik.jetpackcomposetemplate.ui.activitys
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -63,6 +66,7 @@ class GameViewModel : ViewModel() {
     
     var currentGameState by mutableStateOf(GameState.SETUP)
     var gameMessage by mutableStateOf("Game Started")
+    var humanCount by mutableStateOf(0)
 
     private val _board = MutableStateFlow<List<List<BoardSpace>>>(emptyList())
     val board: StateFlow<List<List<BoardSpace>>> = _board.asStateFlow()
@@ -75,6 +79,7 @@ class GameViewModel : ViewModel() {
     // --- SETUP ---
     fun setupGame(totalPlayers: Int, humans: Int) {
         val handSize = when (totalPlayers) { 2 -> 7; 3, 4 -> 6; else -> 5 }
+        humanCount = humans
 
         deck.clear()
         for (i in 1..2) {
@@ -93,7 +98,7 @@ class GameViewModel : ViewModel() {
 
         val teamColors = listOf(TeamColor.BLUE, TeamColor.GREEN, TeamColor.RED, TeamColor.YELLOW)
         players = List(totalPlayers) { index ->
-            val isCpu = index >= humans // First 'N' players are human, rest are CPU
+            val isCpu = index >= humans
             Player(id = index + 1, team = teamColors[index], isCpu = isCpu, hand = drawCards(handSize))
         }
 
@@ -165,17 +170,21 @@ class GameViewModel : ViewModel() {
             currentGameState = GameState.PLAYING
             playCpuTurn()
         } else {
-            currentGameState = GameState.PASS_DEVICE
+            // Only show Pass Device screen if there are multiple humans playing
+            if (humanCount > 1) {
+                currentGameState = GameState.PASS_DEVICE
+            } else {
+                currentGameState = GameState.PLAYING
+            }
         }
     }
 
     // --- CPU LOGIC ---
     private fun playCpuTurn() = viewModelScope.launch {
-        delay(1500) // Simulate thinking time so the human can see the transition
+        delay(1500) 
         val currentBoard = _board.value
         var moveMade = false
 
-        // Randomize hand to pick a random playable card
         for (card in currentPlayer.hand.shuffled()) {
             val flatBoard = currentBoard.flatten()
             
@@ -203,7 +212,6 @@ class GameViewModel : ViewModel() {
             }
         }
 
-        // Failsafe: If the CPU's cards are completely blocked, discard and skip turn.
         if (!moveMade) {
             val updatedHand = currentPlayer.hand.toMutableList()
             updatedHand.removeAt(0)
@@ -237,7 +245,7 @@ fun SequenceApp(viewModel: GameViewModel = viewModel()) {
 @Composable
 fun SetupScreen(viewModel: GameViewModel) {
     var totalPlayers by remember { mutableStateOf(2) }
-    var humans by remember { mutableStateOf(2) }
+    var humans by remember { mutableStateOf(1) }
 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Sequence setup", fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 32.dp))
@@ -303,22 +311,28 @@ fun GameScreen(viewModel: GameViewModel) {
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.padding(1.dp).aspectRatio(1f)
                         .border(if (space.isHighlighted) 3.dp else 1.dp, if (space.isHighlighted) Color.Yellow else Color.DarkGray)
-                        .background(when {
-                            space.occupant != TeamColor.NONE -> space.occupant.uiColor
-                            space.card.rank == Rank.CORNER -> Color.LightGray
-                            else -> Color.White
-                        })
+                        .background(if (space.card.rank == Rank.CORNER) Color.LightGray else Color.White)
                         .clickable(enabled = space.isHighlighted) { viewModel.humanPlaceToken(row, col) }
                 ) {
-                    if (space.occupant == TeamColor.NONE) {
-                        if (space.card.rank == Rank.CORNER) {
-                            Text("⭐\nWILD", fontSize = 10.sp, textAlign = TextAlign.Center, color = Color.DarkGray, fontWeight = FontWeight.Bold)
-                        } else {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(space.card.rank.text, fontSize = 14.sp, color = space.card.suit.color, fontWeight = FontWeight.Bold)
-                                Text(space.card.suit.symbol, fontSize = 12.sp, color = space.card.suit.color)
-                            }
+                    // ALWAYS draw the card text underneath so it is visible
+                    if (space.card.rank == Rank.CORNER) {
+                        Text("⭐\nWILD", fontSize = 10.sp, textAlign = TextAlign.Center, color = Color.DarkGray, fontWeight = FontWeight.Bold)
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(space.card.rank.text, fontSize = 14.sp, color = space.card.suit.color, fontWeight = FontWeight.Bold)
+                            Text(space.card.suit.symbol, fontSize = 12.sp, color = space.card.suit.color)
                         }
+                    }
+
+                    // DRAW THE COIN CIRCLE OVERLAY IF OCCUPIED
+                    if (space.occupant != TeamColor.NONE) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize(0.65f) // Makes the circle take up 65% of the square so corners peek out
+                                .clip(CircleShape)
+                                .background(space.occupant.uiColor.copy(alpha = 0.85f)) // Slight transparency to read text
+                                .border(1.dp, Color.Black, CircleShape)
+                        )
                     }
                 }
             }
@@ -326,29 +340,35 @@ fun GameScreen(viewModel: GameViewModel) {
 
         Spacer(Modifier.height(8.dp))
 
-        // --- PLAYER HAND ---
+        // --- PLAYER HAND (FIT TO SCREEN) ---
         if (!currentPlayer.isCpu) {
             Text("Your Cards:", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Row(Modifier.fillMaxWidth().height(100.dp).horizontalScroll(rememberScrollState())) {
+            Row(
+                Modifier.fillMaxWidth().height(90.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly // Distributes evenly without scrolling
+            ) {
                 currentPlayer.hand.forEach { card ->
                     Card(
-                        modifier = Modifier.padding(4.dp).width(70.dp).fillMaxHeight()
-                            .border(4.dp, if (card == selectedCard) Color.Cyan else Color.Transparent, MaterialTheme.shapes.medium)
+                        modifier = Modifier
+                            .weight(1f) // Forces all cards to fit on screen
+                            .padding(2.dp)
+                            .fillMaxHeight()
+                            .border(3.dp, if (card == selectedCard) Color.Cyan else Color.Transparent, MaterialTheme.shapes.small)
                             .clickable { viewModel.selectCard(card) },
                         colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(4.dp)
                     ) {
                         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Text(card.rank.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = card.suit.color)
-                            Text(card.suit.symbol, fontSize = 20.sp, color = card.suit.color)
-                            if (card.isTwoEyedJack) Text("WILD", fontSize = 10.sp, color = Color.Blue)
-                            if (card.isOneEyedJack) Text("REMOVE", fontSize = 10.sp, color = Color.Red)
+                            Text(card.rank.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = card.suit.color)
+                            Text(card.suit.symbol, fontSize = 16.sp, color = card.suit.color)
+                            if (card.isTwoEyedJack) Text("WILD", fontSize = 8.sp, color = Color.Blue)
+                            if (card.isOneEyedJack) Text("REMOVE", fontSize = 8.sp, color = Color.Red)
                         }
                     }
                 }
             }
         } else {
             // CPU Hand Placeholder (hidden from human)
-            Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().height(90.dp), contentAlignment = Alignment.Center) {
                 Text("CPU is deciding...", color = Color.Gray, fontSize = 18.sp)
             }
         }

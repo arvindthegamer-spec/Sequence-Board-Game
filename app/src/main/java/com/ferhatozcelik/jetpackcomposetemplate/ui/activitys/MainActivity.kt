@@ -35,7 +35,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -126,7 +125,7 @@ class GameViewModel : ViewModel() {
     private var players: List<Player> = emptyList()
     private var cpuJob: Job? = null
 
-    var currentPlayerIndex by mutableIntStateOf(0)
+    var currentPlayerIndex by mutableStateOf(0)
         private set
 
     var currentGameState by mutableStateOf(GameState.SETUP)
@@ -135,10 +134,10 @@ class GameViewModel : ViewModel() {
     var gameMessage by mutableStateOf("Choose game settings.")
         private set
 
-    var humanCount by mutableIntStateOf(1)
+    var humanCount by mutableStateOf(1)
         private set
 
-    var numberOfTeams by mutableIntStateOf(2)
+    var numberOfTeams by mutableStateOf(2)
         private set
 
     var winnerTeam by mutableStateOf<TeamColor?>(null)
@@ -610,9 +609,9 @@ fun SequenceApp(gameViewModel: GameViewModel = viewModel()) {
 
 @Composable
 fun SetupScreen(gameViewModel: GameViewModel) {
-    var totalPlayers by remember { mutableIntStateOf(2) }
-    var humans by remember { mutableIntStateOf(1) }
-    var teams by remember { mutableIntStateOf(2) }
+    var totalPlayers by remember { mutableStateOf(2) }
+    var humans by remember { mutableStateOf(1) }
+    var teams by remember { mutableStateOf(2) }
 
     val supportedPlayers = listOf(2, 3, 4, 6, 8, 9, 10, 12)
     val availableTeams = when (totalPlayers) {

@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "485866391728",
+    "firebase_url": "https://sequence-game-multiplayer-default-rtdb.firebaseio.com",
     "project_id": "sequence-game-multiplayer",
     "storage_bucket": "sequence-game-multiplayer.firebasestorage.app"
   },

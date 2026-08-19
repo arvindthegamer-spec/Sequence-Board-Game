@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "485866391728",
+    "project_id": "sequence-game-multiplayer",
+    "storage_bucket": "sequence-game-multiplayer.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485866391728:android:cc354e463cdb0dba6f5375",
+        "android_client_info": {
+          "package_name": "com.ferhatozcelik.jetpackcomposetemplate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDts87ZQuu_y_J1e15ErXKjGQ_6d4VJ9aU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

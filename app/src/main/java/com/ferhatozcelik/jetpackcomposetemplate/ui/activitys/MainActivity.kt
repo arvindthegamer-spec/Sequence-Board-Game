@@ -395,7 +395,7 @@ enum class OnlineAppState { LOBBY, CREATE, JOIN, WAITING, PLAYING }
 
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
-    var currentAppState by mutableStateOf(OnlineAppState.LOBBY); private set
+    var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
     var myPlayerNumber by mutableStateOf(1)
     var roomCode by mutableStateOf("")
     var roomPassword by mutableStateOf("")
@@ -496,6 +496,7 @@ fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     }
 }
 
+@kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun OnlineCreateScreen(vm: MultiplayerViewModel) {
     var password by remember { mutableStateOf("") }
@@ -508,6 +509,7 @@ fun OnlineCreateScreen(vm: MultiplayerViewModel) {
     }
 }
 
+@kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun OnlineJoinScreen(vm: MultiplayerViewModel) {
     var code by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }

@@ -66,7 +66,6 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-@Composable
 fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color(0xFFF1F3F4)), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("SEQUENCE", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
@@ -87,7 +86,7 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit) {
         Text("Developed by Aravind Valluri", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium)
     }
 }
-}
+
 
 // ==============================================================================
 // 2. OFFLINE CORE GAME (Untouched Original Logic)

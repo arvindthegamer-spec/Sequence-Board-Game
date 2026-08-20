@@ -18,9 +18,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1025,7 +1028,15 @@ data class FBCard(val suit: String = "", val rank: String = "", val id: Int = 0)
     fun matches(other: FBCard): Boolean = suit == other.suit && rank == other.rank
 }
 
-data class FBSpace(val r: Int = 0, val c: Int = 0, val card: FBCard = FBCard(), val occupant: String = "NONE", val isCompletedSequence: Boolean = false)
+data class FBSpace(
+    val r: Int = 0,
+    val c: Int = 0,
+    val card: FBCard = FBCard(),
+    val occupant: String = "NONE",
+    @field:JvmField var completedSequence: Boolean = false
+) {
+    val isCompletedSequence: Boolean get() = completedSequence
+}
 
 data class FBPlayer(
     val playerId: Int = 0,
@@ -1214,41 +1225,50 @@ class MultiplayerViewModel : ViewModel() {
         })
     }
 
-    private fun checkAndLockSequences(board: MutableList<FBSpace>, team: String): Boolean {
+    private fun updateAllSequencesAndCheckWinner(board: MutableList<FBSpace>): String? {
+        val teams = if (_roomData.value.numberOfTeams == 2) listOf("BLUE", "GREEN") else listOf("BLUE", "GREEN", "RED")
+        val reqSeq = if (_roomData.value.numberOfTeams == 2) 2 else 1
+        var winningTeam: String? = null
+
         val directions = listOf(0 to 1, 1 to 0, 1 to 1, 1 to -1)
-        val candidates = mutableListOf<Set<Pair<Int, Int>>>()
-        
-        for (r in 0..9) {
-            for (c in 0..9) {
-                for ((dr, dc) in directions) {
-                    val positions = (0..4).map { r + dr * it to c + dc * it }
-                    if (positions.none { (pr, pc) -> pr !in 0..9 || pc !in 0..9 }) {
-                        val isComplete = positions.all { (pr, pc) ->
-                            val space = board.first { it.r == pr && it.c == pc }
-                            space.card.rank == "★" || space.occupant == team
+        val protectedPositions = mutableSetOf<Pair<Int, Int>>()
+
+        for (team in teams) {
+            val candidates = mutableListOf<Set<Pair<Int, Int>>>()
+            for (r in 0..9) {
+                for (c in 0..9) {
+                    for ((dr, dc) in directions) {
+                        val positions = (0..4).map { r + dr * it to c + dc * it }
+                        if (positions.none { (pr, pc) -> pr !in 0..9 || pc !in 0..9 }) {
+                            val isComplete = positions.all { (pr, pc) ->
+                                val space = board.firstOrNull { it.r == pr && it.c == pc }
+                                space != null && (space.card.rank == "★" || space.occupant == team)
+                            }
+                            if (isComplete) candidates.add(positions.toSet())
                         }
-                        if (isComplete) candidates.add(positions.toSet())
                     }
                 }
             }
-        }
-        
-        val accepted = mutableListOf<Set<Pair<Int, Int>>>()
-        for (cand in candidates) {
-            if (accepted.all { prev -> cand.intersect(prev).size <= 1 }) {
-                accepted.add(cand)
+
+            val accepted = mutableListOf<Set<Pair<Int, Int>>>()
+            for (cand in candidates) {
+                if (accepted.all { prev -> cand.intersect(prev).size <= 1 }) {
+                    accepted.add(cand)
+                }
+            }
+
+            protectedPositions.addAll(accepted.flatten())
+            if (accepted.size >= reqSeq && winningTeam == null) {
+                winningTeam = team
             }
         }
-        
-        val protected = accepted.flatten().toSet()
+
         for (i in board.indices) {
-            if (board[i].occupant == team && (board[i].r to board[i].c) in protected) {
-                board[i] = board[i].copy(isCompletedSequence = true)
-            }
+            val isLocked = (board[i].r to board[i].c) in protectedPositions
+            board[i] = board[i].copy(completedSequence = isLocked)
         }
-        
-        val reqSeq = if (_roomData.value.numberOfTeams == 2) 2 else 1
-        return accepted.size >= reqSeq
+
+        return winningTeam
     }
 
     fun playCard(card: FBCard, row: Int, col: Int) {
@@ -1273,10 +1293,10 @@ class MultiplayerViewModel : ViewModel() {
         if (!isLegal) return
 
         val newOccupant = if (isOneEyed) "NONE" else myTeam
-        val finalTarget = if (isOneEyed) targetSpace.copy(occupant = newOccupant, isCompletedSequence = false) else targetSpace.copy(occupant = newOccupant)
+        val finalTarget = if (isOneEyed) targetSpace.copy(occupant = newOccupant, completedSequence = false) else targetSpace.copy(occupant = newOccupant)
         updatedBoard[targetIndex] = finalTarget
 
-        val isWinner = if (!isOneEyed) checkAndLockSequences(updatedBoard, myTeam) else false
+        val winningTeam = updateAllSequencesAndCheckWinner(updatedBoard)
 
         val updatedHand = myPlayerObj.hand.toMutableList()
         updatedHand.remove(card)
@@ -1288,12 +1308,24 @@ class MultiplayerViewModel : ViewModel() {
         val nextPlayerName = room.players.firstOrNull { it.playerId == nextTurnId }?.playerName ?: "Player $nextTurnId"
 
         val actionMsg = if (isOneEyed) "${myPlayerObj.playerName} removed a chip!" else "${myPlayerObj.playerName} placed a chip."
-        
-        if (isWinner) {
-            val winUpdates = mapOf("board" to updatedBoard, "players" to updatedPlayers, "status" to "FINISHED", "message" to "Team $myTeam Wins!", "winnerTeam" to myTeam)
+
+        if (winningTeam != null) {
+            val winUpdates = mapOf(
+                "board" to updatedBoard,
+                "players" to updatedPlayers,
+                "status" to "FINISHED",
+                "message" to "Team $winningTeam Wins!",
+                "winnerTeam" to winningTeam
+            )
             db.child("rooms").child(roomCode).updateChildren(winUpdates)
         } else {
-            val updates = mapOf("board" to updatedBoard, "deck" to deckList, "players" to updatedPlayers, "turnPlayerId" to nextTurnId, "message" to "$actionMsg $nextPlayerName's turn.")
+            val updates = mapOf(
+                "board" to updatedBoard,
+                "deck" to deckList,
+                "players" to updatedPlayers,
+                "turnPlayerId" to nextTurnId,
+                "message" to "$actionMsg $nextPlayerName's turn."
+            )
             db.child("rooms").child(roomCode).updateChildren(updates)
         }
     }
@@ -1301,7 +1333,7 @@ class MultiplayerViewModel : ViewModel() {
     fun replaceDeadCard(card: FBCard) {
         val room = _roomData.value
         if (room.turnPlayerId != myAssignedId || room.status == "FINISHED") return
-        
+
         if (card.rank == "J") {
             db.child("rooms").child(roomCode).child("message").setValue("A Jack is not a dead card.")
             return
@@ -1322,7 +1354,7 @@ class MultiplayerViewModel : ViewModel() {
         }
 
         val updatedPlayers = room.players.map { if (it.playerId == myAssignedId) it.copy(hand = updatedHand) else it }
-        
+
         val updates = mapOf(
             "deck" to deckList,
             "players" to updatedPlayers,
@@ -1479,8 +1511,48 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val myHand = myPlayer?.hand ?: emptyList()
     var selectedCard by remember { mutableStateOf<FBCard?>(null) }
 
+    val myTeamColor = when (myPlayer?.team) {
+        "BLUE" -> Color(0xFF1976D2)
+        "GREEN" -> Color(0xFF159447)
+        "RED" -> Color(0xFFD32F2F)
+        else -> Color.Black
+    }
+
+    val teamSequences = remember(room.board, myPlayer?.team) {
+        if (myPlayer != null) {
+            val directions = listOf(0 to 1, 1 to 0, 1 to 1, 1 to -1)
+            val candidates = mutableListOf<Set<Pair<Int, Int>>>()
+            for (r in 0..9) {
+                for (c in 0..9) {
+                    for ((dr, dc) in directions) {
+                        val positions = (0..4).map { r + dr * it to c + dc * it }
+                        if (positions.none { (pr, pc) -> pr !in 0..9 || pc !in 0..9 }) {
+                            val isComplete = positions.all { (pr, pc) ->
+                                val space = room.board.firstOrNull { it.r == pr && it.c == pc }
+                                space != null && (space.card.rank == "★" || space.occupant == myPlayer.team)
+                            }
+                            if (isComplete) candidates.add(positions.toSet())
+                        }
+                    }
+                }
+            }
+            val accepted = mutableListOf<Set<Pair<Int, Int>>>()
+            for (cand in candidates) {
+                if (accepted.all { prev -> cand.intersect(prev).size <= 1 }) {
+                    accepted.add(cand)
+                }
+            }
+            accepted.size
+        } else 0
+    }
+    val reqSequences = if (room.numberOfTeams == 2) 2 else 1
+
     Column(Modifier.fillMaxSize().padding(5.dp)) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(Modifier.weight(1f)) {
                 if (room.status == "FINISHED") {
                     Text(room.message, fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 22.sp)
@@ -1489,7 +1561,16 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
                 Text("Room: ${room.roomId} | You: ${vm.playerName} (${myPlayer?.team})", fontSize = 12.sp, color = Color.DarkGray)
             }
-            TextButton(onClick = { vm.backToLobby(); onExit() }) { Text("Exit", color = Color.Red) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "$teamSequences/$reqSequences",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = myTeamColor,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                TextButton(onClick = { vm.backToLobby(); onExit() }) { Text("Exit", color = Color.Red) }
+            }
         }
 
         if (room.board.isNotEmpty()) {
@@ -1533,7 +1614,19 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                                 "GREEN" -> Color(0xFF159447).copy(alpha = chipAlpha)
                                 else -> Color(0xFFD32F2F).copy(alpha = chipAlpha)
                             }
-                            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f).clip(CircleShape).background(chipColor).border(if(space.isCompletedSequence) 2.dp else 1.dp, if(space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) {
+                            Box(
+                                Modifier.align(Alignment.BottomCenter)
+                                    .padding(bottom = 2.dp)
+                                    .fillMaxWidth(0.68f)
+                                    .aspectRatio(1f)
+                                    .clip(CircleShape)
+                                    .background(chipColor)
+                                    .border(
+                                        if (space.isCompletedSequence) 2.dp else 1.dp,
+                                        if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f),
+                                        CircleShape
+                                    )
+                            ) {
                                 if (space.isCompletedSequence) {
                                     Text(
                                         "✓",
@@ -1551,11 +1644,61 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         }
 
         Spacer(Modifier.height(4.dp))
+        
+        // --- HORIZONTALLY SCROLLABLE PLAYER LIST UI ---
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(room.players) { p ->
+                val pColor = when (p.team) {
+                    "BLUE" -> Color(0xFF1976D2)
+                    "GREEN" -> Color(0xFF159447)
+                    "RED" -> Color(0xFFD32F2F)
+                    else -> Color.Black
+                }
+                val isThisPlayerTurn = p.playerId == room.turnPlayerId
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(
+                            if (isThisPlayerTurn) pColor.copy(alpha = 0.15f) else Color.Transparent,
+                            MaterialTheme.shapes.extraSmall
+                        )
+                        .border(
+                            width = if (isThisPlayerTurn) 1.dp else 0.dp,
+                            color = if (isThisPlayerTurn) pColor else Color.Transparent,
+                            shape = MaterialTheme.shapes.extraSmall
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Box(
+                        Modifier.size(8.dp).clip(CircleShape).background(pColor)
+                            .border(0.5.dp, Color.Black, CircleShape)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = p.playerName,
+                        fontSize = 11.sp,
+                        fontWeight = if (isThisPlayerTurn) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isThisPlayerTurn) Color.Black else Color.DarkGray
+                    )
+                }
+            }
+        }
+        // ----------------------------------------------
+
         Column {
             Row(Modifier.fillMaxWidth().height(80.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 myHand.forEach { card ->
                     val selected = card == selectedCard
-                    Card(modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small).clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Card(
+                        modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight()
+                            .border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small)
+                            .clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card },
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
                         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
                             Text(card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)

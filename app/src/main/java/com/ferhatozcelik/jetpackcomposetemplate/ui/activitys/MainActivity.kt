@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 // ==============================================================================
-// 1. MAIN MENU (Entry Point)
+// 1. MAIN MENU
 // ==============================================================================
 
 enum class AppMode { MENU, OFFLINE, ONLINE }
@@ -107,7 +107,7 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit) {
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onPlayOnline, modifier = Modifier.fillMaxWidth(0.7f).height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))) {
-            Text("Play Online (With a Friend)", fontSize = 16.sp)
+            Text("Play Online (With Friends)", fontSize = 16.sp)
         }
         Spacer(modifier = Modifier.height(64.dp))
         Text("Developed by Aravind Valluri", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium)
@@ -115,7 +115,7 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit) {
 }
 
 // ==============================================================================
-// 2. OFFLINE CORE GAME (100% Original Logic)
+// 2. OFFLINE CORE GAME (100% Untouched Original Logic)
 // ==============================================================================
 
 enum class Suit(val symbol: String, val color: Color) {
@@ -1005,87 +1005,186 @@ fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
 }
 
 // ==============================================================================
-// 3. ONLINE MULTIPLAYER (Firebase Integration)
+// 3. ONLINE MULTIPLAYER (Full 2-12 Players, Teams, Jacks, & Names)
 // ==============================================================================
 
-data class FBCard(val suit: String = "", val rank: String = "", val id: Int = 0)
-data class FBSpace(val r: Int = 0, val c: Int = 0, val card: FBCard = FBCard(), val occupant: String = "NONE")
-data class GameRoom(
-    var roomId: String = "", var password: String = "", var status: String = "WAITING",
-    var turn: Int = 1, var message: String = "Waiting for Player 2...",
-    var board: List<FBSpace> = emptyList(), var p1Hand: List<FBCard> = emptyList(),
-    var p2Hand: List<FBCard> = emptyList(), var deck: List<FBCard> = emptyList()
+data class FBCard(val suit: String = "", val rank: String = "", val id: Int = 0) {
+    val isTwoEyedJack: Boolean get() = rank == "J" && (suit == "♦" || suit == "♣")
+    val isOneEyedJack: Boolean get() = rank == "J" && (suit == "♠" || suit == "♥")
+    fun matches(other: FBCard): Boolean = suit == other.suit && rank == other.rank
+}
+
+data class FBSpace(val r: Int = 0, val c: Int = 0, val card: FBCard = FBCard(), val occupant: String = "NONE", val isCompletedSequence: Boolean = false)
+
+data class FBPlayer(
+    val playerId: Int = 0,
+    val playerName: String = "",
+    val team: String = "BLUE",
+    val hand: List<FBCard> = emptyList()
 )
 
-enum class OnlineAppState { LOBBY, CREATE, JOIN, WAITING, PLAYING }
+data class GameRoom(
+    var roomId: String = "",
+    var password: String = "",
+    var status: String = "WAITING", // WAITING, PLAYING, FINISHED
+    var hostName: String = "",
+    var numberOfTeams: Int = 2,
+    var turnPlayerId: Int = 1,
+    var message: String = "Waiting for players to join...",
+    var board: List<FBSpace> = emptyList(),
+    var players: List<FBPlayer> = emptyList(),
+    var deck: List<FBCard> = emptyList(),
+    var winnerTeam: String = ""
+)
+
+enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
 
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
     var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
-    var myPlayerNumber by mutableStateOf(1)
+    var playerName by mutableStateOf("Player")
     var roomCode by mutableStateOf("")
     var roomPassword by mutableStateOf("")
     var lobbyError by mutableStateOf("")
 
+    var selectedTeams by mutableStateOf(2)
+
     private val _roomData = MutableStateFlow(GameRoom())
     val roomData: StateFlow<GameRoom> = _roomData.asStateFlow()
     private var roomListener: ValueEventListener? = null
+    private var myAssignedId: Int = 1
 
     fun backToLobby() {
         currentAppState = OnlineAppState.LOBBY
         roomListener?.let { db.child("rooms").child(roomCode).removeEventListener(it) }
     }
 
-    fun prepareCreateRoom() {
+    fun proceedToCreate(name: String) {
+        if (name.isBlank()) { lobbyError = "Enter a valid name"; return }
+        playerName = name.trim()
         roomCode = Random.nextInt(1000, 9999).toString()
         lobbyError = ""
-        currentAppState = OnlineAppState.CREATE
+        currentAppState = OnlineAppState.CREATE_ROOM
     }
 
-    fun executeCreateRoom(password: String) {
+    fun proceedToJoin(name: String) {
+        if (name.isBlank()) { lobbyError = "Enter a valid name"; return }
+        playerName = name.trim()
+        lobbyError = ""
+        currentAppState = OnlineAppState.JOIN_ROOM
+    }
+
+    fun executeCreateRoom(password: String, numTeams: Int) {
         roomPassword = password
-        myPlayerNumber = 1
-        currentAppState = OnlineAppState.WAITING
-        
-        val initialRoom = GameRoom(roomId = roomCode, password = password, status = "WAITING", board = buildInitialBoard(), deck = buildDeck())
+        selectedTeams = numTeams
+        myAssignedId = 1
+        currentAppState = OnlineAppState.WAITING_ROOM
+
+        val hostPlayer = FBPlayer(playerId = 1, playerName = playerName, team = "BLUE", hand = emptyList())
+        val initialRoom = GameRoom(
+            roomId = roomCode,
+            password = password,
+            status = "WAITING",
+            hostName = playerName,
+            numberOfTeams = numTeams,
+            turnPlayerId = 1,
+            message = "Waiting for players...",
+            board = buildInitialBoard(),
+            players = listOf(hostPlayer),
+            deck = buildDeck()
+        )
+
         db.child("rooms").child(roomCode).setValue(initialRoom).addOnSuccessListener {
             listenToRoom(roomCode)
-        }.addOnFailureListener { 
-            lobbyError = "Database connection failed."
-            currentAppState = OnlineAppState.CREATE 
+        }.addOnFailureListener {
+            lobbyError = "Database error. Check connection."
+            currentAppState = OnlineAppState.CREATE_ROOM
         }
     }
 
     fun joinRoom(code: String, password: String) {
-        lobbyError = "Checking room..."
+        lobbyError = "Joining room..."
         db.child("rooms").child(code).get().addOnSuccessListener { snapshot ->
             val room = snapshot.getValue(GameRoom::class.java)
-            if (room == null) lobbyError = "Room not found."
-            else if (room.password != password) lobbyError = "Wrong password."
-            else if (room.status != "WAITING") lobbyError = "Room is full/started."
-            else { roomCode = code; myPlayerNumber = 2; dealStartingHands(room) }
-        }.addOnFailureListener { lobbyError = "Database error." }
+            if (room == null) {
+                lobbyError = "Room not found."
+            } else if (room.password != password) {
+                lobbyError = "Wrong password."
+            } else if (room.status != "WAITING") {
+                lobbyError = "Game already started."
+            } else if (room.players.size >= 12) {
+                lobbyError = "Room is full (max 12)."
+            } else {
+                roomCode = code
+                val newId = room.players.size + 1
+                myAssignedId = newId
+
+                val teamList = if (room.numberOfTeams == 2) listOf("BLUE", "GREEN") else listOf("BLUE", "GREEN", "RED")
+                val assignedTeam = teamList[(newId - 1) % room.numberOfTeams]
+
+                val updatedPlayers = room.players.toMutableList()
+                updatedPlayers.add(FBPlayer(playerId = newId, playerName = playerName, team = assignedTeam, hand = emptyList()))
+
+                db.child("rooms").child(code).child("players").setValue(updatedPlayers).addOnSuccessListener {
+                    listenToRoom(code)
+                    currentAppState = OnlineAppState.WAITING_ROOM
+                }
+            }
+        }.addOnFailureListener { lobbyError = "Connection failed." }
     }
 
-    private fun dealStartingHands(room: GameRoom) {
+    fun changePlayerTeam(playerId: Int) {
+        val room = _roomData.value
+        if (room.hostName != playerName) return
+        val players = room.players.toMutableList()
+        val index = players.indexOfFirst { it.playerId == playerId }
+        if (index != -1) {
+            val currentTeam = players[index].team
+            val nextTeam = if (room.numberOfTeams == 2) {
+                if (currentTeam == "BLUE") "GREEN" else "BLUE"
+            } else {
+                when (currentTeam) { "BLUE" -> "GREEN"; "GREEN" -> "RED"; else -> "BLUE" }
+            }
+            players[index] = players[index].copy(team = nextTeam)
+            db.child("rooms").child(roomCode).child("players").setValue(players)
+        }
+    }
+
+    fun hostStartGame() {
+        val room = _roomData.value
+        val pCount = room.players.size
+        val validCounts = listOf(2, 3, 4, 6, 8, 9, 10, 12)
+        if (pCount !in validCounts) {
+            lobbyError = "Invalid number of players ($pCount). Need 2,3,4,6,8,9,10, or 12."
+            return
+        }
+        if (pCount % room.numberOfTeams != 0) {
+            lobbyError = "Players must divide evenly into ${room.numberOfTeams} teams."
+            return
+        }
+
         val currentDeck = room.deck.toMutableList()
-        val p1Cards = mutableListOf<FBCard>()
-        val p2Cards = mutableListOf<FBCard>()
-        repeat(7) {
-            if (currentDeck.isNotEmpty()) p1Cards.add(currentDeck.removeAt(0))
-            if (currentDeck.isNotEmpty()) p2Cards.add(currentDeck.removeAt(0))
+        val handSize = when (pCount) {
+            2 -> 7
+            in 3..4 -> 6
+            6 -> 5
+            in 8..9 -> 4
+            else -> 3
         }
+
+        val updatedPlayers = room.players.map { player ->
+            val pHand = mutableListOf<FBCard>()
+            repeat(handSize) { if (currentDeck.isNotEmpty()) pHand.add(currentDeck.removeAt(0)) }
+            player.copy(hand = pHand)
+        }
+
         val updates = mapOf(
-            "p1Hand" to p1Cards,
-            "p2Hand" to p2Cards,
-            "deck" to currentDeck,
             "status" to "PLAYING",
-            "message" to "Game Started! Player 1's Turn."
+            "deck" to currentDeck,
+            "players" to updatedPlayers,
+            "message" to "Game started! Player 1's turn."
         )
-        db.child("rooms").child(roomCode).updateChildren(updates).addOnSuccessListener {
-            listenToRoom(roomCode)
-            currentAppState = OnlineAppState.PLAYING
-        }
+        db.child("rooms").child(roomCode).updateChildren(updates)
     }
 
     private fun listenToRoom(code: String) {
@@ -1095,41 +1194,95 @@ class MultiplayerViewModel : ViewModel() {
                 val room = snapshot.getValue(GameRoom::class.java)
                 if (room != null) {
                     _roomData.value = room
-                    if (room.status == "PLAYING" && currentAppState == OnlineAppState.WAITING) {
+                    if (room.status == "PLAYING" && currentAppState == OnlineAppState.WAITING_ROOM) {
                         currentAppState = OnlineAppState.PLAYING
                     }
                 }
             }
-            override fun onCancelled(error: DatabaseError) { lobbyError = "Connection lost." }
+            override fun onCancelled(error: DatabaseError) { lobbyError = "Lost connection." }
         })
     }
 
-    fun playCard(card: FBCard, row: Int, col: Int) {
-        val currentRoom = _roomData.value
-        if (currentRoom.turn != myPlayerNumber) return
-
-        val updatedBoard = currentRoom.board.toMutableList()
-        val targetIndex = updatedBoard.indexOfFirst { it.r == row && it.c == col }
+    private fun checkAndLockSequences(board: MutableList<FBSpace>, team: String): Boolean {
+        val directions = listOf(0 to 1, 1 to 0, 1 to 1, 1 to -1)
+        val candidates = mutableListOf<Set<Pair<Int, Int>>>()
         
-        if (targetIndex != -1) {
-            val teamColor = if (myPlayerNumber == 1) "BLUE" else "GREEN"
-            updatedBoard[targetIndex] = updatedBoard[targetIndex].copy(occupant = teamColor)
+        for (r in 0..9) {
+            for (c in 0..9) {
+                for ((dr, dc) in directions) {
+                    val positions = (0..4).map { r + dr * it to c + dc * it }
+                    if (positions.none { (pr, pc) -> pr !in 0..9 || pc !in 0..9 }) {
+                        val isComplete = positions.all { (pr, pc) ->
+                            val space = board.first { it.r == pr && it.c == pc }
+                            space.card.rank == "★" || space.occupant == team
+                        }
+                        if (isComplete) candidates.add(positions.toSet())
+                    }
+                }
+            }
+        }
+        
+        val accepted = mutableListOf<Set<Pair<Int, Int>>>()
+        for (cand in candidates) {
+            if (accepted.all { prev -> cand.intersect(prev).size <= 1 }) {
+                accepted.add(cand)
+            }
+        }
+        
+        val protected = accepted.flatten().toSet()
+        for (i in board.indices) {
+            if (board[i].occupant == team && (board[i].r to board[i].c) in protected) {
+                board[i] = board[i].copy(isCompletedSequence = true)
+            }
+        }
+        
+        val reqSeq = if (_roomData.value.numberOfTeams == 2) 2 else 1
+        return accepted.size >= reqSeq
+    }
 
-            val myHand = if (myPlayerNumber == 1) currentRoom.p1Hand.toMutableList() else currentRoom.p2Hand.toMutableList()
-            myHand.remove(card)
+    fun playCard(card: FBCard, row: Int, col: Int) {
+        val room = _roomData.value
+        if (room.turnPlayerId != myAssignedId || room.status == "FINISHED") return
 
-            val deck = currentRoom.deck.toMutableList()
-            if (deck.isNotEmpty()) myHand.add(deck.removeAt(0))
+        val myPlayerObj = room.players.firstOrNull { it.playerId == myAssignedId } ?: return
+        val updatedBoard = room.board.toMutableList()
+        val targetIndex = updatedBoard.indexOfFirst { it.r == row && it.c == col }
+        if (targetIndex == -1) return
+        val targetSpace = updatedBoard[targetIndex]
 
-            val nextTurn = if (myPlayerNumber == 1) 2 else 1
-            
-            val updates = mutableMapOf<String, Any>(
-                "board" to updatedBoard,
-                "deck" to deck,
-                "turn" to nextTurn,
-                "message" to "Player $nextTurn's Turn."
-            )
-            if (myPlayerNumber == 1) updates["p1Hand"] = myHand else updates["p2Hand"] = myHand
+        val myTeam = myPlayerObj.team
+        val isTwoEyed = card.isTwoEyedJack
+        val isOneEyed = card.isOneEyedJack
+
+        val isLegal = targetSpace.card.rank != "★" && when {
+            isTwoEyed -> targetSpace.occupant == "NONE"
+            isOneEyed -> targetSpace.occupant != "NONE" && targetSpace.occupant != myTeam && !targetSpace.isCompletedSequence
+            else -> targetSpace.occupant == "NONE" && targetSpace.card.matches(card)
+        }
+        if (!isLegal) return
+
+        val newOccupant = if (isOneEyed) "NONE" else myTeam
+        val finalTarget = if (isOneEyed) targetSpace.copy(occupant = newOccupant, isCompletedSequence = false) else targetSpace.copy(occupant = newOccupant)
+        updatedBoard[targetIndex] = finalTarget
+
+        val isWinner = if (!isOneEyed) checkAndLockSequences(updatedBoard, myTeam) else false
+
+        val updatedHand = myPlayerObj.hand.toMutableList()
+        updatedHand.remove(card)
+        val deckList = room.deck.toMutableList()
+        if (deckList.isNotEmpty()) updatedHand.add(deckList.removeAt(0))
+
+        val updatedPlayers = room.players.map { if (it.playerId == myAssignedId) it.copy(hand = updatedHand) else it }
+        val nextTurnId = if (room.turnPlayerId >= room.players.size) 1 else room.turnPlayerId + 1
+        val nextPlayerName = room.players.firstOrNull { it.playerId == nextTurnId }?.playerName ?: "Player $nextTurnId"
+
+        val actionMsg = if (isOneEyed) "${myPlayerObj.playerName} removed a chip!" else "${myPlayerObj.playerName} placed a chip."
+        
+        if (isWinner) {
+            val winUpdates = mapOf("board" to updatedBoard, "players" to updatedPlayers, "status" to "FINISHED", "message" to "Team $myTeam Wins!", "winnerTeam" to myTeam)
+            db.child("rooms").child(roomCode).updateChildren(winUpdates)
+        } else {
+            val updates = mapOf("board" to updatedBoard, "deck" to deckList, "players" to updatedPlayers, "turnPlayerId" to nextTurnId, "message" to "$actionMsg $nextPlayerName's turn.")
             db.child("rooms").child(roomCode).updateChildren(updates)
         }
     }
@@ -1165,9 +1318,10 @@ class MultiplayerViewModel : ViewModel() {
 fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
     when (viewModel.currentAppState) {
         OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.CREATE -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
         OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
     }
 }
@@ -1176,9 +1330,24 @@ fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = view
 fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("Online Multiplayer", fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 32.dp))
-        Button(onClick = { vm.prepareCreateRoom() }, modifier = Modifier.fillMaxWidth(0.6f).padding(8.dp)) { Text("Create Room") }
-        Button(onClick = { vm.currentAppState = OnlineAppState.JOIN }, modifier = Modifier.fillMaxWidth(0.6f).padding(8.dp)) { Text("Join Room") }
+        Button(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME; vm.lobbyError = "" }, modifier = Modifier.fillMaxWidth(0.6f).padding(8.dp)) { Text("Play Online") }
         TextButton(onClick = onExit, modifier = Modifier.padding(top = 32.dp)) { Text("Back to Main Menu", color = Color.Red) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnlineEnterNameScreen(vm: MultiplayerViewModel) {
+    var nameInput by remember { mutableStateOf(vm.playerName) }
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text("Enter Your Name", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = nameInput, onValueChange = { nameInput = it }, label = { Text("Display Name") }, modifier = Modifier.padding(vertical = 16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.proceedToCreate(nameInput) }) { Text("Create Room") }
+            Button(onClick = { vm.proceedToJoin(nameInput) }) { Text("Join Room") }
+        }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.LOBBY }) { Text("Back") }
+        if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -1186,13 +1355,22 @@ fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 @Composable
 fun OnlineCreateScreen(vm: MultiplayerViewModel) {
     var password by remember { mutableStateOf("") }
+    var teams by remember { mutableStateOf(2) }
+
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("Your Room Code:", fontSize = 20.sp, color = Color.Gray)
-        Text(vm.roomCode, fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2), modifier = Modifier.padding(bottom = 16.dp))
-        
-        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Set an optional password") }, modifier = Modifier.padding(vertical = 16.dp))
-        Button(onClick = { vm.executeCreateRoom(password) }) { Text("Open Room & Wait") }
-        Button(onClick = { vm.backToLobby() }, modifier = Modifier.padding(top = 16.dp)) { Text("Cancel") }
+        Text("Room Code: ${vm.roomCode}", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Optional Password") }, modifier = Modifier.padding(vertical = 8.dp))
+
+        Text("Teams: $teams", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(2, 3).forEach { tCount ->
+                Button(onClick = { teams = tCount }, colors = ButtonDefaults.buttonColors(containerColor = if (teams == tCount) Color.Blue else Color.Gray)) { Text(tCount.toString()) }
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+        Button(onClick = { vm.executeCreateRoom(password, teams) }) { Text("Open Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text("Cancel") }
         if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
     }
 }
@@ -1205,36 +1383,65 @@ fun OnlineJoinScreen(vm: MultiplayerViewModel) {
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("Join Friend's Room", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         OutlinedTextField(value = code, onValueChange = { code = it }, label = { Text("4-Digit Room Code") })
-        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password (if any)") }, modifier = Modifier.padding(vertical = 16.dp))
-        Button(onClick = { vm.joinRoom(code, password) }) { Text("Join Game") }
-        Button(onClick = { vm.backToLobby() }, modifier = Modifier.padding(top = 16.dp)) { Text("Cancel") }
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password (if any)") }, modifier = Modifier.padding(vertical = 12.dp))
+        Button(onClick = { vm.joinRoom(code, password) }) { Text("Join Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text("Cancel") }
         if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
 @Composable
 fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("Room Code: ${vm.roomCode}", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-        Text("Password: ${vm.roomPassword}", fontSize = 20.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 32.dp))
-        CircularProgressIndicator()
-        Text("Waiting for Player 2 to join...", modifier = Modifier.padding(top = 16.dp))
-        TextButton(onClick = { vm.backToLobby(); onExit() }, modifier = Modifier.padding(top = 32.dp)) { Text("Cancel and Leave", color = Color.Red) }
+    val room by vm.roomData.collectAsState()
+    val isHost = room.hostName == vm.playerName
+
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text("Room Code: ${room.roomId}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        Text("Players Joined (${room.players.size}):", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+
+        room.players.forEach { p ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                Text("- ${p.playerName} (Team ${p.team})", fontSize = 16.sp, color = Color.DarkGray, modifier = Modifier.weight(1f))
+                if (isHost) {
+                    Button(onClick = { vm.changePlayerTeam(p.playerId) }, modifier = Modifier.height(30.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)) {
+                        Text("Change Team", fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+
+        if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+
+        Spacer(Modifier.height(24.dp))
+        if (isHost) {
+            Text("Wait for players, then start.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
+            Button(onClick = { vm.hostStartGame() }) { Text("START GAME NOW") }
+        } else {
+            CircularProgressIndicator()
+            Text("Waiting for host to start...", modifier = Modifier.padding(top = 12.dp))
+        }
+
+        TextButton(onClick = { vm.backToLobby(); onExit() }, modifier = Modifier.padding(top = 24.dp)) { Text("Leave Room", color = Color.Red) }
     }
 }
 
 @Composable
 fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val room by vm.roomData.collectAsState()
-    val isMyTurn = room.turn == vm.myPlayerNumber
-    val myHand = if (vm.myPlayerNumber == 1) room.p1Hand else room.p2Hand
+    val myPlayer = room.players.firstOrNull { it.playerName == vm.playerName }
+    val isMyTurn = myPlayer != null && room.turnPlayerId == myPlayer.playerId && room.status != "FINISHED"
+    val myHand = myPlayer?.hand ?: emptyList()
     var selectedCard by remember { mutableStateOf<FBCard?>(null) }
 
     Column(Modifier.fillMaxSize().padding(5.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color.Blue else Color.Gray, fontSize = 18.sp)
-                Text("Room: ${room.roomId} | You are Player ${vm.myPlayerNumber}", fontSize = 12.sp, color = Color.DarkGray)
+            Column(Modifier.weight(1f)) {
+                if (room.status == "FINISHED") {
+                    Text(room.message, fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 22.sp)
+                } else {
+                    Text(room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.Gray, fontSize = 16.sp)
+                }
+                Text("Room: ${room.roomId} | You: ${vm.playerName} (${myPlayer?.team})", fontSize = 12.sp, color = Color.DarkGray)
             }
             TextButton(onClick = { vm.backToLobby(); onExit() }) { Text("Exit", color = Color.Red) }
         }
@@ -1242,13 +1449,45 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         if (room.board.isNotEmpty()) {
             LazyVerticalGrid(columns = GridCells.Fixed(10), modifier = Modifier.weight(1f)) {
                 items(room.board) { space ->
-                    val isLegalMove = selectedCard != null && space.occupant == "NONE" && space.card.rank == selectedCard!!.rank && space.card.suit == selectedCard!!.suit
-                    Box(modifier = Modifier.aspectRatio(0.68f).padding(1.dp).background(if (space.card.rank == "★") Color(0xFFFFD75E) else Color.White).border(if (isLegalMove) 2.dp else 1.dp, if (isLegalMove) Color.Green else Color.LightGray).clickable(enabled = isLegalMove && isMyTurn) { vm.playCard(selectedCard!!, space.r, space.c); selectedCard = null }) {
-                        Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(space.card.rank, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
-                            Text(space.card.suit, fontSize = 10.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
+                    val isTwoEyed = selectedCard?.isTwoEyedJack == true
+                    val isOneEyed = selectedCard?.isOneEyedJack == true
+                    val myTeam = myPlayer?.team ?: "BLUE"
+
+                    val isLegalMove = selectedCard != null && space.card.rank != "★" && when {
+                        isTwoEyed -> space.occupant == "NONE"
+                        isOneEyed -> space.occupant != "NONE" && space.occupant != myTeam && !space.isCompletedSequence
+                        else -> space.occupant == "NONE" && space.card.matches(selectedCard!!)
+                    }
+
+                    val bg = when {
+                        space.card.rank == "★" -> Color(0xFFFFD75E)
+                        isLegalMove -> Color(0xFF9EE6AC)
+                        space.isCompletedSequence -> {
+                            when (space.occupant) {
+                                "BLUE" -> Color(0xFF1976D2).copy(alpha = 0.18f)
+                                "GREEN" -> Color(0xFF159447).copy(alpha = 0.18f)
+                                else -> Color(0xFFD32F2F).copy(alpha = 0.18f)
+                            }
                         }
-                        if (space.occupant != "NONE") Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.7f).aspectRatio(1f).clip(CircleShape).background(if (space.occupant == "BLUE") Color.Blue else Color.Green).border(1.dp, Color.Black, CircleShape))
+                        else -> Color.White
+                    }
+
+                    Box(modifier = Modifier.aspectRatio(0.68f).padding(1.dp).background(bg).border(if (isLegalMove || space.isCompletedSequence) 2.dp else 1.dp, if (isLegalMove) Color(0xFF07852B) else Color.LightGray).clickable(enabled = isLegalMove && isMyTurn) {
+                        vm.playCard(selectedCard!!, space.r, space.c)
+                        selectedCard = null
+                    }) {
+                        Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(space.card.rank, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
+                            Text(space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
+                        }
+                        if (space.occupant != "NONE") {
+                            val chipColor = when (space.occupant) {
+                                "BLUE" -> Color(0xFF1976D2)
+                                "GREEN" -> Color(0xFF159447)
+                                else -> Color(0xFFD32F2F)
+                            }
+                            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.7f).aspectRatio(1f).clip(CircleShape).background(chipColor).border(if(space.isCompletedSequence) 2.dp else 1.dp, if(space.isCompletedSequence) Color.White else Color.Black, CircleShape))
+                        }
                     }
                 }
             }
@@ -1258,10 +1497,14 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         Row(Modifier.fillMaxWidth().height(80.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             myHand.forEach { card ->
                 val selected = card == selectedCard
-                Card(modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color.Green else Color.LightGray, MaterialTheme.shapes.small).clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small).clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Text(card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
                         Text(card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
+                        when {
+                            card.isTwoEyedJack -> Text("WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
+                            card.isOneEyedJack -> Text("REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

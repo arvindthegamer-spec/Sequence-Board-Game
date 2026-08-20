@@ -934,40 +934,42 @@ private fun PlayerHand(
     onSelect: (Int) -> Unit,
     onReplaceDeadCard: () -> Unit
 ) {
-    Row(
-        Modifier.fillMaxWidth().height(76.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        player.hand.forEach { card ->
-            val selected = card.uniqueId == selectedCardId
-            Card(
-                modifier = Modifier.weight(1f).fillMaxHeight()
-                    .border(
-                        if (selected) 3.dp else 1.dp,
-                        if (selected) Color(0xFF07852B) else Color.LightGray,
-                        MaterialTheme.shapes.small
-                    )
-                    .clickable { onSelect(card.uniqueId) },
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(
-                    Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+    Column {
+        Row(
+            Modifier.fillMaxWidth().height(76.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            player.hand.forEach { card ->
+                val selected = card.uniqueId == selectedCardId
+                Card(
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                        .border(
+                            if (selected) 3.dp else 1.dp,
+                            if (selected) Color(0xFF07852B) else Color.LightGray,
+                            MaterialTheme.shapes.small
+                        )
+                        .clickable { onSelect(card.uniqueId) },
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Text(card.rank.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = card.suit.color)
-                    Text(card.suit.symbol, fontSize = 14.sp, color = card.suit.color)
-                    when {
-                        card.isTwoEyedJack -> Text("WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
-                        card.isOneEyedJack -> Text("REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                    Column(
+                        Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(card.rank.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = card.suit.color)
+                        Text(card.suit.symbol, fontSize = 14.sp, color = card.suit.color)
+                        when {
+                            card.isTwoEyedJack -> Text("WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
+                            card.isOneEyedJack -> Text("REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
-    }
-    OutlinedButton(onClick = onReplaceDeadCard, enabled = selectedCardId != null) {
-        Text("Replace selected dead card", fontSize = 12.sp)
+        OutlinedButton(onClick = onReplaceDeadCard, enabled = selectedCardId != null) {
+            Text("Replace selected dead card", fontSize = 12.sp)
+        }
     }
 }
 
@@ -1295,6 +1297,39 @@ class MultiplayerViewModel : ViewModel() {
             db.child("rooms").child(roomCode).updateChildren(updates)
         }
     }
+    
+    fun replaceDeadCard(card: FBCard) {
+        val room = _roomData.value
+        if (room.turnPlayerId != myAssignedId || room.status == "FINISHED") return
+        
+        if (card.rank == "J") {
+            db.child("rooms").child(roomCode).child("message").setValue("A Jack is not a dead card.")
+            return
+        }
+
+        val matches = room.board.filter { it.card.matches(card) }
+        if (matches.isEmpty() || matches.any { it.occupant == "NONE" }) {
+            db.child("rooms").child(roomCode).child("message").setValue("That card is not dead. Open space available.")
+            return
+        }
+
+        val myPlayerObj = room.players.firstOrNull { it.playerId == myAssignedId } ?: return
+        val updatedHand = myPlayerObj.hand.toMutableList()
+        updatedHand.remove(card)
+        val deckList = room.deck.toMutableList()
+        if (deckList.isNotEmpty()) {
+            updatedHand.add(deckList.removeAt(0))
+        }
+
+        val updatedPlayers = room.players.map { if (it.playerId == myAssignedId) it.copy(hand = updatedHand) else it }
+        
+        val updates = mapOf(
+            "deck" to deckList,
+            "players" to updatedPlayers,
+            "message" to "${myPlayerObj.playerName} replaced a dead card."
+        )
+        db.child("rooms").child(roomCode).updateChildren(updates)
+    }
 
     private fun buildDeck(): List<FBCard> = buildList {
         var id = 0
@@ -1492,12 +1527,23 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             Text(space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
                         }
                         if (space.occupant != "NONE") {
+                            val chipAlpha = if (space.isCompletedSequence) 0.62f else 0.9f
                             val chipColor = when (space.occupant) {
-                                "BLUE" -> Color(0xFF1976D2)
-                                "GREEN" -> Color(0xFF159447)
-                                else -> Color(0xFFD32F2F)
+                                "BLUE" -> Color(0xFF1976D2).copy(alpha = chipAlpha)
+                                "GREEN" -> Color(0xFF159447).copy(alpha = chipAlpha)
+                                else -> Color(0xFFD32F2F).copy(alpha = chipAlpha)
                             }
-                            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.7f).aspectRatio(1f).clip(CircleShape).background(chipColor).border(if(space.isCompletedSequence) 2.dp else 1.dp, if(space.isCompletedSequence) Color.White else Color.Black, CircleShape))
+                            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f).clip(CircleShape).background(chipColor).border(if(space.isCompletedSequence) 2.dp else 1.dp, if(space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) {
+                                if (space.isCompletedSequence) {
+                                    Text(
+                                        "✓",
+                                        Modifier.align(Alignment.Center),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1505,19 +1551,30 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         }
 
         Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth().height(80.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            myHand.forEach { card ->
-                val selected = card == selectedCard
-                Card(modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small).clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
-                        Text(card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
-                        when {
-                            card.isTwoEyedJack -> Text("WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
-                            card.isOneEyedJack -> Text("REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+        Column {
+            Row(Modifier.fillMaxWidth().height(80.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                myHand.forEach { card ->
+                    val selected = card == selectedCard
+                    Card(modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small).clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
+                            Text(card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
+                            when {
+                                card.isTwoEyedJack -> Text("WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
+                                card.isOneEyedJack -> Text("REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
+            }
+            OutlinedButton(
+                onClick = { 
+                    selectedCard?.let { vm.replaceDeadCard(it) }
+                    selectedCard = null 
+                }, 
+                enabled = selectedCard != null && isMyTurn
+            ) {
+                Text("Replace selected dead card", fontSize = 12.sp)
             }
         }
     }

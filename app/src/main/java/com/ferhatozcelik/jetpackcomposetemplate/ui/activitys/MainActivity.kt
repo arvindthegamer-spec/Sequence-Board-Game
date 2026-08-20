@@ -65,6 +65,23 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 // ==============================================================================
+// GLOBAL STATIC BOARD LAYOUT (Matches Classic Physical Board)
+// ==============================================================================
+
+val BOARD_LAYOUT = arrayOf(
+    arrayOf("★", "2♠", "3♠", "4♠", "5♠", "6♠", "7♠", "8♠", "9♠", "★"),
+    arrayOf("6♣", "5♣", "4♣", "3♣", "2♣", "A♥", "K♥", "Q♥", "10♥", "10♠"),
+    arrayOf("7♣", "A♠", "2♦", "3♦", "4♦", "5♦", "6♦", "7♦", "9♥", "Q♠"),
+    arrayOf("8♣", "K♠", "6♣", "5♣", "4♣", "3♣", "2♣", "8♦", "8♥", "K♠"),
+    arrayOf("9♣", "Q♠", "7♣", "6♥", "5♥", "4♥", "A♥", "9♦", "7♥", "A♣"),
+    arrayOf("10♣", "10♠", "8♣", "7♥", "2♥", "3♥", "K♥", "10♦", "6♥", "2♣"),
+    arrayOf("Q♣", "9♠", "9♣", "8♥", "9♥", "10♥", "Q♥", "Q♦", "5♥", "3♣"),
+    arrayOf("K♣", "8♠", "10♣", "Q♣", "K♣", "A♣", "2♦", "K♦", "4♥", "4♣"),
+    arrayOf("A♣", "7♠", "6♠", "5♠", "4♠", "3♠", "2♠", "2♥", "3♥", "5♣"),
+    arrayOf("★", "A♦", "K♦", "Q♦", "10♦", "9♦", "8♦", "7♦", "6♦", "★")
+)
+
+// ==============================================================================
 // 1. MAIN MENU
 // ==============================================================================
 
@@ -115,7 +132,7 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit) {
 }
 
 // ==============================================================================
-// 2. OFFLINE CORE GAME (100% Untouched Original Logic)
+// 2. OFFLINE CORE GAME
 // ==============================================================================
 
 enum class Suit(val symbol: String, val color: Color) {
@@ -220,6 +237,15 @@ class GameViewModel : ViewModel() {
     private val requiredSequences: Int
         get() = if (numberOfTeams == 2) 2 else 1
 
+    private fun getPlayingCardFromString(cardString: String, id: Int): PlayingCard {
+        if (cardString == "★") return PlayingCard(Suit.NONE, Rank.CORNER, id)
+        val rankStr = cardString.dropLast(1)
+        val suitStr = cardString.takeLast(1)
+        val rank = Rank.entries.first { it.text == rankStr }
+        val suit = Suit.entries.first { it.symbol == suitStr }
+        return PlayingCard(suit, rank, id)
+    }
+
     fun setupGame(totalPlayers: Int, humans: Int, requestedTeams: Int) {
         require(totalPlayers in listOf(2, 3, 4, 6, 8, 9, 10, 12))
         require(requestedTeams in 2..3)
@@ -235,18 +261,14 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
 
         deck = buildTwoDecks().shuffled(random).toMutableList()
-        val boardCards = buildBoardCards().shuffled(random).toMutableList()
+        
+        var idCounter = 10000
         _board.value = List(10) { row ->
             List(10) { col ->
-                val corner = (row == 0 || row == 9) && (col == 0 || col == 9)
                 BoardSpace(
                     row = row,
                     col = col,
-                    card = if (corner) {
-                        PlayingCard(Suit.NONE, Rank.CORNER, -1 - row * 10 - col)
-                    } else {
-                        boardCards.removeFirst()
-                    }
+                    card = getPlayingCardFromString(BOARD_LAYOUT[row][col], idCounter++)
                 )
             }
         }
@@ -289,19 +311,6 @@ class GameViewModel : ViewModel() {
             repeat(2) {
                 for (suit in Suit.entries.filter { it != Suit.NONE }) {
                     for (rank in Rank.entries.filter { it != Rank.CORNER }) {
-                        add(PlayingCard(suit, rank, id++))
-                    }
-                }
-            }
-        }
-    }
-
-    private fun buildBoardCards(): List<PlayingCard> {
-        var id = 10_000
-        return buildList {
-            repeat(2) {
-                for (suit in Suit.entries.filter { it != Suit.NONE }) {
-                    for (rank in Rank.entries.filter { it != Rank.J && it != Rank.CORNER }) {
                         add(PlayingCard(suit, rank, id++))
                     }
                 }
@@ -1005,7 +1014,7 @@ fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
 }
 
 // ==============================================================================
-// 3. ONLINE MULTIPLAYER (Full 2-12 Players, Teams, Jacks, & Names)
+// 3. ONLINE MULTIPLAYER 
 // ==============================================================================
 
 data class FBCard(val suit: String = "", val rank: String = "", val id: Int = 0) {
@@ -1026,7 +1035,7 @@ data class FBPlayer(
 data class GameRoom(
     var roomId: String = "",
     var password: String = "",
-    var status: String = "WAITING", // WAITING, PLAYING, FINISHED
+    var status: String = "WAITING",
     var hostName: String = "",
     var numberOfTeams: Int = 2,
     var turnPlayerId: Int = 1,
@@ -1299,15 +1308,17 @@ class MultiplayerViewModel : ViewModel() {
     }.shuffled()
 
     private fun buildInitialBoard(): List<FBSpace> {
-        val deck = buildDeck().filter { it.rank != "J" }.toMutableList()
+        var idCounter = -100
         return buildList {
             for (r in 0..9) {
                 for (c in 0..9) {
-                    if ((r == 0 || r == 9) && (c == 0 || c == 9)) {
-                        add(FBSpace(r, c, FBCard("", "★", -1), "NONE"))
+                    val cardStr = BOARD_LAYOUT[r][c]
+                    val fbCard = if (cardStr == "★") {
+                        FBCard("", "★", idCounter--)
                     } else {
-                        add(FBSpace(r, c, deck.removeAt(0), "NONE"))
+                        FBCard(suit = cardStr.takeLast(1), rank = cardStr.dropLast(1), id = idCounter--)
                     }
+                    add(FBSpace(r, c, fbCard, "NONE"))
                 }
             }
         }

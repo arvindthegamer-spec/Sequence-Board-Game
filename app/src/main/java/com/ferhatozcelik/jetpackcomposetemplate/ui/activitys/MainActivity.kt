@@ -68,7 +68,7 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 // ==============================================================================
-// GLOBAL STATIC BOARD LAYOUT (100% Authentic Sequence Board - User Corrected)
+// GLOBAL STATIC BOARD LAYOUT
 // ==============================================================================
 
 val BOARD_LAYOUT = arrayOf(
@@ -300,9 +300,9 @@ class GameViewModel : ViewModel() {
         _sequenceCounts.value = teams.associateWith { 0 }
         currentGameState = GameState.PLAYING
         gameMessage = if (requiredSequences == 2) {
-            "First team to complete 2 sequences wins."
+            "First team to complete 2 sequences wins. Player 1's turn."
         } else {
-            "First team to complete 1 sequence wins."
+            "First team to complete 1 sequence wins. Player 1's turn."
         }
 
         if (currentPlayer.isCpu) startCpuTurn()
@@ -342,13 +342,6 @@ class GameViewModel : ViewModel() {
             row.map { space ->
                 space.copy(isHighlighted = isLegalDestination(card, space, currentPlayer.team))
             }
-        }
-
-        val count = _board.value.flatten().count { it.isHighlighted }
-        gameMessage = if (count == 0) {
-            "No legal position. If both matching spaces are occupied, replace this dead card."
-        } else {
-            "$count legal move${if (count == 1) "" else "s"} highlighted in green."
         }
     }
 
@@ -410,18 +403,24 @@ class GameViewModel : ViewModel() {
         updatePlayer(movingPlayer.copy(hand = newHand))
         _selectedCardId.value = null
 
-        gameMessage = if (cardUsed.isOneEyedJack) {
-            "Player ${movingPlayer.id} removed an opponent chip."
-        } else {
-            "Player ${movingPlayer.id} placed ${cardUsed.rank.text}${cardUsed.suit.symbol}."
+        var turnSummary = when {
+            cardUsed.isOneEyedJack -> "Player ${movingPlayer.id} used a Remove Jack."
+            cardUsed.isTwoEyedJack -> "Player ${movingPlayer.id} used a Wild Jack."
+            else -> "Player ${movingPlayer.id} placed ${cardUsed.rank.text}${cardUsed.suit.symbol}."
         }
 
         if (!cardUsed.isOneEyedJack) {
-            if (updateSequencesAndCheckWinner(movingPlayer.team)) return
+            val seqResult = updateSequencesAndCheckWinner(movingPlayer.team)
+            if (seqResult == 1) {
+                turnSummary += " Sequence completed!"
+            } else if (seqResult == 2) {
+                gameMessage = "$turnSummary Team ${movingPlayer.team.name} wins!"
+                return
+            }
         }
 
-        if (checkForDraw()) return
-        advanceTurn()
+        if (checkForDraw(turnSummary)) return
+        advanceTurn(turnSummary)
     }
 
     private fun updatePlayer(updated: Player) {
@@ -430,22 +429,13 @@ class GameViewModel : ViewModel() {
 
     fun replaceSelectedDeadCard() {
         if (currentGameState != GameState.PLAYING || currentPlayer.isCpu) return
-        val cardId = _selectedCardId.value ?: run {
-            gameMessage = "Select a card first."
-            return
-        }
+        val cardId = _selectedCardId.value ?: return
         val card = currentPlayer.hand.firstOrNull { it.uniqueId == cardId } ?: return
 
-        if (card.rank == Rank.J) {
-            gameMessage = "A Jack is not a dead card."
-            return
-        }
+        if (card.rank == Rank.J) return
 
         val matches = _board.value.flatten().filter { it.card.matches(card) }
-        if (matches.isEmpty() || matches.any { it.occupant == TeamColor.NONE }) {
-            gameMessage = "That card is not dead because a matching space is open."
-            return
-        }
+        if (matches.isEmpty() || matches.any { it.occupant == TeamColor.NONE }) return
 
         val newHand = currentPlayer.hand
             .filterNot { it.uniqueId == card.uniqueId }
@@ -455,11 +445,9 @@ class GameViewModel : ViewModel() {
         updatePlayer(currentPlayer.copy(hand = newHand))
         _selectedCardId.value = null
         clearHighlights()
-        gameMessage = if (replacement != null) {
-            "Dead card replaced. Take your normal turn."
-        } else {
-            "Dead card discarded. The draw pile is empty."
-        }
+        
+        val msg = "Player ${currentPlayer.id} replaced a dead card."
+        gameMessage = "$msg Player ${currentPlayer.id}'s turn."
         checkForDraw()
     }
 
@@ -502,7 +490,7 @@ class GameViewModel : ViewModel() {
         return accepted
     }
 
-    private fun updateSequencesAndCheckWinner(team: TeamColor): Boolean {
+    private fun updateSequencesAndCheckWinner(team: TeamColor): Int {
         val completed = findCompletedLines(team)
         val oldCount = _sequenceCounts.value[team] ?: 0
         val newCount = completed.size
@@ -522,23 +510,15 @@ class GameViewModel : ViewModel() {
             }
         }
 
-        if (newCount > oldCount) {
-            gameMessage = when {
-                newCount >= requiredSequences ->
-                    "Team ${team.name} completed ${if (newCount == 1) "a sequence" else "$newCount sequences"} and wins!"
-                requiredSequences == 2 ->
-                    "Team ${team.name} completed its first sequence. One more is needed."
-                else -> "Team ${team.name} completed a sequence!"
-            }
-        }
-
         if (newCount >= requiredSequences) {
             winnerTeam = team
             currentGameState = GameState.FINISHED
             cpuJob?.cancel()
-            return true
+            return 2
+        } else if (newCount > oldCount) {
+            return 1
         }
-        return false
+        return 0
     }
 
     private fun playerHasLegalMove(player: Player): Boolean {
@@ -548,7 +528,7 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    private fun checkForDraw(): Boolean {
+    private fun checkForDraw(prefix: String = ""): Boolean {
         if (winnerTeam != null) return false
 
         val nobodyHasCards = players.all { it.hand.isEmpty() }
@@ -558,29 +538,32 @@ class GameViewModel : ViewModel() {
         if (draw) {
             isDraw = true
             currentGameState = GameState.FINISHED
-            gameMessage = "Draw: the draw pile is empty and no legal moves remain."
+            val p = if (prefix.isNotEmpty()) "$prefix " else ""
+            gameMessage = "${p}Draw: the draw pile is empty and no legal moves remain."
             cpuJob?.cancel()
             return true
         }
         return false
     }
 
-    private fun advanceTurn() {
+    private fun advanceTurn(prefix: String = "") {
         if (currentGameState == GameState.FINISHED) return
         currentPlayerIndex = (currentPlayerIndex + 1) % players.size
         _selectedCardId.value = null
         clearHighlights()
 
+        val p = if (prefix.isNotEmpty()) "$prefix " else ""
+
         if (currentPlayer.isCpu) {
             currentGameState = GameState.PLAYING
-            gameMessage = "CPU Player ${currentPlayer.id} is thinking..."
+            gameMessage = "${p}CPU ${currentPlayer.id} is thinking..."
             startCpuTurn()
         } else if (humanCount > 1) {
             currentGameState = GameState.PASS_DEVICE
-            gameMessage = "Pass the device without showing the next player's cards."
+            gameMessage = "${p}Pass to Player ${currentPlayer.id}."
         } else {
             currentGameState = GameState.PLAYING
-            gameMessage = "Player ${currentPlayer.id}, choose a card."
+            gameMessage = "${p}Player ${currentPlayer.id}'s turn."
         }
     }
 
@@ -593,7 +576,7 @@ class GameViewModel : ViewModel() {
     private fun startCpuTurn() {
         cpuJob?.cancel()
         cpuJob = viewModelScope.launch {
-            delay(800)
+            delay(1200)
             if (currentGameState != GameState.PLAYING || !currentPlayer.isCpu) return@launch
 
             val cpu = currentPlayer
@@ -622,11 +605,14 @@ class GameViewModel : ViewModel() {
                     .toMutableList()
                 drawOneCard()?.let(newHand::add)
                 updatePlayer(cpu.copy(hand = newHand))
-                gameMessage = "CPU Player ${cpu.id} replaced a dead card."
-                if (!checkForDraw()) startCpuTurn()
+                
+                val msg = "CPU ${cpu.id} replaced a dead card."
+                if (!checkForDraw(msg)) {
+                    gameMessage = "$msg CPU ${cpu.id} is thinking..."
+                    startCpuTurn()
+                }
             } else if (!checkForDraw()) {
-                gameMessage = "CPU Player ${cpu.id} has no legal move."
-                advanceTurn()
+                advanceTurn("CPU ${cpu.id} has no legal move.")
             }
         }
     }
@@ -775,15 +761,10 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (player.isCpu) "CPU ${player.id} is thinking..." else "Player ${player.id}'s turn",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = player.team.uiColor
-                )
-                Text(
                     gameViewModel.gameMessage,
-                    fontSize = 12.sp,
-                    color = Color.DarkGray,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = player.team.uiColor,
                     maxLines = 2
                 )
             }
@@ -1056,7 +1037,9 @@ data class GameRoom(
     var board: List<FBSpace> = emptyList(),
     var players: List<FBPlayer> = emptyList(),
     var deck: List<FBCard> = emptyList(),
-    var winnerTeam: String = ""
+    var winnerTeam: String = "",
+    var lastMoveRow: Int = -1,
+    var lastMoveCol: Int = -1
 )
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
@@ -1074,7 +1057,9 @@ class MultiplayerViewModel : ViewModel() {
     private val _roomData = MutableStateFlow(GameRoom())
     val roomData: StateFlow<GameRoom> = _roomData.asStateFlow()
     private var roomListener: ValueEventListener? = null
-    private var myAssignedId: Int = 1
+    
+    private val myPlayerId: Int
+        get() = _roomData.value.players.firstOrNull { it.playerName == playerName }?.playerId ?: -1
 
     fun backToLobby() {
         currentAppState = OnlineAppState.LOBBY
@@ -1099,7 +1084,6 @@ class MultiplayerViewModel : ViewModel() {
     fun executeCreateRoom(password: String, numTeams: Int) {
         roomPassword = password
         selectedTeams = numTeams
-        myAssignedId = 1
         currentAppState = OnlineAppState.WAITING_ROOM
 
         val hostPlayer = FBPlayer(playerId = 1, playerName = playerName, team = "BLUE", hand = emptyList())
@@ -1139,7 +1123,6 @@ class MultiplayerViewModel : ViewModel() {
             } else {
                 roomCode = code
                 val newId = room.players.size + 1
-                myAssignedId = newId
 
                 val teamList = if (room.numberOfTeams == 2) listOf("BLUE", "GREEN") else listOf("BLUE", "GREEN", "RED")
                 val assignedTeam = teamList[(newId - 1) % room.numberOfTeams]
@@ -1185,6 +1168,17 @@ class MultiplayerViewModel : ViewModel() {
             return
         }
 
+        val teamList = if (room.numberOfTeams == 2) listOf("BLUE", "GREEN") else listOf("BLUE", "GREEN", "RED")
+        val groupedByTeam = room.players.groupBy { it.team }
+        val reorderedPlayers = mutableListOf<FBPlayer>()
+        val maxPerTeam = groupedByTeam.values.maxOfOrNull { it.size } ?: 0
+
+        for (i in 0 until maxPerTeam) {
+            for (team in teamList) {
+                groupedByTeam[team]?.getOrNull(i)?.let { reorderedPlayers.add(it) }
+            }
+        }
+
         val currentDeck = room.deck.toMutableList()
         val handSize = when (pCount) {
             2 -> 7
@@ -1194,17 +1188,20 @@ class MultiplayerViewModel : ViewModel() {
             else -> 3
         }
 
-        val updatedPlayers = room.players.map { player ->
+        val updatedPlayers = reorderedPlayers.mapIndexed { index, player ->
             val pHand = mutableListOf<FBCard>()
             repeat(handSize) { if (currentDeck.isNotEmpty()) pHand.add(currentDeck.removeAt(0)) }
-            player.copy(hand = pHand)
+            player.copy(playerId = index + 1, hand = pHand)
         }
+
+        val firstPlayerName = updatedPlayers.firstOrNull()?.playerName ?: "Player 1"
 
         val updates = mapOf(
             "status" to "PLAYING",
             "deck" to currentDeck,
             "players" to updatedPlayers,
-            "message" to "Game started! Player 1's turn."
+            "turnPlayerId" to 1,
+            "message" to "Game started! $firstPlayerName's turn."
         )
         db.child("rooms").child(roomCode).updateChildren(updates)
     }
@@ -1273,9 +1270,10 @@ class MultiplayerViewModel : ViewModel() {
 
     fun playCard(card: FBCard, row: Int, col: Int) {
         val room = _roomData.value
-        if (room.turnPlayerId != myAssignedId || room.status == "FINISHED") return
+        val myId = myPlayerId
+        if (room.turnPlayerId != myId || room.status == "FINISHED") return
 
-        val myPlayerObj = room.players.firstOrNull { it.playerId == myAssignedId } ?: return
+        val myPlayerObj = room.players.firstOrNull { it.playerId == myId } ?: return
         val updatedBoard = room.board.toMutableList()
         val targetIndex = updatedBoard.indexOfFirst { it.r == row && it.c == col }
         if (targetIndex == -1) return
@@ -1303,19 +1301,25 @@ class MultiplayerViewModel : ViewModel() {
         val deckList = room.deck.toMutableList()
         if (deckList.isNotEmpty()) updatedHand.add(deckList.removeAt(0))
 
-        val updatedPlayers = room.players.map { if (it.playerId == myAssignedId) it.copy(hand = updatedHand) else it }
+        val updatedPlayers = room.players.map { if (it.playerId == myId) it.copy(hand = updatedHand) else it }
         val nextTurnId = if (room.turnPlayerId >= room.players.size) 1 else room.turnPlayerId + 1
         val nextPlayerName = room.players.firstOrNull { it.playerId == nextTurnId }?.playerName ?: "Player $nextTurnId"
 
-        val actionMsg = if (isOneEyed) "${myPlayerObj.playerName} removed a chip!" else "${myPlayerObj.playerName} placed a chip."
+        val actionMsg = when {
+            isOneEyed -> "${myPlayerObj.playerName} used a Remove Jack!"
+            isTwoEyed -> "${myPlayerObj.playerName} used a Wild Jack!"
+            else -> "${myPlayerObj.playerName} placed a chip."
+        }
 
         if (winningTeam != null) {
             val winUpdates = mapOf(
                 "board" to updatedBoard,
                 "players" to updatedPlayers,
                 "status" to "FINISHED",
-                "message" to "Team $winningTeam Wins!",
-                "winnerTeam" to winningTeam
+                "message" to "$actionMsg Team $winningTeam Wins!",
+                "winnerTeam" to winningTeam,
+                "lastMoveRow" to row,
+                "lastMoveCol" to col
             )
             db.child("rooms").child(roomCode).updateChildren(winUpdates)
         } else {
@@ -1324,7 +1328,9 @@ class MultiplayerViewModel : ViewModel() {
                 "deck" to deckList,
                 "players" to updatedPlayers,
                 "turnPlayerId" to nextTurnId,
-                "message" to "$actionMsg $nextPlayerName's turn."
+                "message" to "$actionMsg $nextPlayerName's turn.",
+                "lastMoveRow" to row,
+                "lastMoveCol" to col
             )
             db.child("rooms").child(roomCode).updateChildren(updates)
         }
@@ -1332,7 +1338,8 @@ class MultiplayerViewModel : ViewModel() {
     
     fun replaceDeadCard(card: FBCard) {
         val room = _roomData.value
-        if (room.turnPlayerId != myAssignedId || room.status == "FINISHED") return
+        val myId = myPlayerId
+        if (room.turnPlayerId != myId || room.status == "FINISHED") return
 
         if (card.rank == "J") {
             db.child("rooms").child(roomCode).child("message").setValue("A Jack is not a dead card.")
@@ -1345,7 +1352,7 @@ class MultiplayerViewModel : ViewModel() {
             return
         }
 
-        val myPlayerObj = room.players.firstOrNull { it.playerId == myAssignedId } ?: return
+        val myPlayerObj = room.players.firstOrNull { it.playerId == myId } ?: return
         val updatedHand = myPlayerObj.hand.toMutableList()
         updatedHand.remove(card)
         val deckList = room.deck.toMutableList()
@@ -1353,12 +1360,12 @@ class MultiplayerViewModel : ViewModel() {
             updatedHand.add(deckList.removeAt(0))
         }
 
-        val updatedPlayers = room.players.map { if (it.playerId == myAssignedId) it.copy(hand = updatedHand) else it }
+        val updatedPlayers = room.players.map { if (it.playerId == myId) it.copy(hand = updatedHand) else it }
 
         val updates = mapOf(
             "deck" to deckList,
             "players" to updatedPlayers,
-            "message" to "${myPlayerObj.playerName} replaced a dead card."
+            "message" to "${myPlayerObj.playerName} replaced a dead card. ${myPlayerObj.playerName}'s turn."
         )
         db.child("rooms").child(roomCode).updateChildren(updates)
     }
@@ -1585,10 +1592,13 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                         isOneEyed -> space.occupant != "NONE" && space.occupant != myTeam && !space.isCompletedSequence
                         else -> space.occupant == "NONE" && space.card.matches(selectedCard!!)
                     }
+                    
+                    val isLastMove = space.r == room.lastMoveRow && space.c == room.lastMoveCol
 
                     val bg = when {
                         space.card.rank == "★" -> Color(0xFFFFD75E)
                         isLegalMove -> Color(0xFF9EE6AC)
+                        isLastMove -> Color(0xFFFFF9C4) 
                         space.isCompletedSequence -> {
                             when (space.occupant) {
                                 "BLUE" -> Color(0xFF1976D2).copy(alpha = 0.18f)
@@ -1599,10 +1609,23 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                         else -> Color.White
                     }
 
-                    Box(modifier = Modifier.aspectRatio(0.68f).padding(1.dp).background(bg).border(if (isLegalMove || space.isCompletedSequence) 2.dp else 1.dp, if (isLegalMove) Color(0xFF07852B) else Color.LightGray).clickable(enabled = isLegalMove && isMyTurn) {
-                        vm.playCard(selectedCard!!, space.r, space.c)
-                        selectedCard = null
-                    }) {
+                    Box(modifier = Modifier
+                        .aspectRatio(0.68f)
+                        .padding(1.dp)
+                        .background(bg)
+                        .border(
+                            width = if (isLegalMove || space.isCompletedSequence || isLastMove) 2.dp else 1.dp,
+                            color = when {
+                                isLegalMove -> Color(0xFF07852B)
+                                isLastMove -> Color(0xFFFF9800) 
+                                else -> Color.LightGray
+                            }
+                        )
+                        .clickable(enabled = isLegalMove && isMyTurn) {
+                            vm.playCard(selectedCard!!, space.r, space.c)
+                            selectedCard = null
+                        }
+                    ) {
                         Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(space.card.rank, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
                             Text(space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
@@ -1645,7 +1668,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
         Spacer(Modifier.height(4.dp))
         
-        // --- HORIZONTALLY SCROLLABLE PLAYER LIST UI ---
         LazyRow(
             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1687,7 +1709,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
             }
         }
-        // ----------------------------------------------
 
         Column {
             Row(Modifier.fillMaxWidth().height(80.dp), horizontalArrangement = Arrangement.SpaceEvenly) {

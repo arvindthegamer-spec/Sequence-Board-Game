@@ -1,6 +1,5 @@
 package com.ferhatozcelik.jetpackcomposetemplate.ui.activitys
 
-import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,7 +38,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +47,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -57,7 +54,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ferhatozcelik.jetpackcomposetemplate.R
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
@@ -346,13 +342,6 @@ class GameViewModel : ViewModel() {
             row.map { space ->
                 space.copy(isHighlighted = isLegalDestination(card, space, currentPlayer.team))
             }
-        }
-
-        val count = _board.value.flatten().count { it.isHighlighted }
-        gameMessage = if (count == 0) {
-            "No legal position. If both matching spaces are occupied, replace this dead card."
-        } else {
-            "$count legal move${if (count == 1) "" else "s"} highlighted in green."
         }
     }
 
@@ -976,17 +965,6 @@ fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         Color(0xFFE7E7E7)
     } else {
         winner.uiColor.copy(alpha = 0.15f)
-    }
-
-    val context = LocalContext.current
-    LaunchedEffect(winner) {
-        if (winner != null) {
-            try {
-                val mp = MediaPlayer.create(context, R.raw.clap)
-                mp?.start()
-                mp?.setOnCompletionListener { it.release() }
-            } catch (e: Exception) { e.printStackTrace() }
-        }
     }
 
     Column(
@@ -1656,17 +1634,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val isMyTurn = myPlayer != null && room.turnPlayerId == myPlayer.playerId && room.status != "FINISHED"
     val myHand = myPlayer?.hand ?: emptyList()
     var selectedCard by remember { mutableStateOf<FBCard?>(null) }
-
-    val context = LocalContext.current
-    LaunchedEffect(room.status) {
-        if (room.status == "FINISHED" && room.winnerTeam.isNotEmpty()) {
-            try {
-                val mp = MediaPlayer.create(context, R.raw.clap)
-                mp?.start()
-                mp?.setOnCompletionListener { it.release() }
-            } catch (e: Exception) { e.printStackTrace() }
-        }
-    }
 
     val myTeamColor = when (myPlayer?.team) {
         "BLUE" -> Color(0xFF1976D2)

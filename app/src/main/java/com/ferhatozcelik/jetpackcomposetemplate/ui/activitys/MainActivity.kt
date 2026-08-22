@@ -110,17 +110,35 @@ data class CompletedLine(val team: TeamColor, val positions: Set<Pair<Int, Int>>
 enum class GameState { SETUP, PASS_DEVICE, PLAYING, FINISHED }
 
 class GameViewModel : ViewModel() {
-    private val random = Random.Default; private var deck = mutableListOf<PlayingCard>(); private var players: List<Player> = emptyList(); private var cpuJob: Job? = null
-    var currentPlayerIndex by mutableStateOf(0) private set
-    var currentGameState by mutableStateOf(GameState.SETUP) private set
-    var gameMessage by mutableStateOf("Choose game settings.") private set
-    var humanCount by mutableStateOf(1) private set
-    var numberOfTeams by mutableStateOf(2) private set
-    var winnerTeam by mutableStateOf<TeamColor?>(null) private set
-    var isDraw by mutableStateOf(false) private set
-    private val _board = MutableStateFlow<List<List<BoardSpace>>>(emptyList()); val board: StateFlow<List<List<BoardSpace>>> = _board.asStateFlow()
-    private val _selectedCardId = MutableStateFlow<Int?>(null); val selectedCardId: StateFlow<Int?> = _selectedCardId.asStateFlow()
-    private val _sequenceCounts = MutableStateFlow<Map<TeamColor, Int>>(emptyMap()); val sequenceCounts: StateFlow<Map<TeamColor, Int>> = _sequenceCounts.asStateFlow()
+    private val random = Random.Default
+    private var deck = mutableListOf<PlayingCard>()
+    private var players: List<Player> = emptyList()
+    private var cpuJob: Job? = null
+
+    var currentPlayerIndex: Int by mutableStateOf(0)
+        private set
+    var currentGameState: GameState by mutableStateOf(GameState.SETUP)
+        private set
+    var gameMessage: String by mutableStateOf("Choose game settings.")
+        private set
+    var humanCount: Int by mutableStateOf(1)
+        private set
+    var numberOfTeams: Int by mutableStateOf(2)
+        private set
+    var winnerTeam: TeamColor? by mutableStateOf(null)
+        private set
+    var isDraw: Boolean by mutableStateOf(false)
+        private set
+
+    private val _board = MutableStateFlow<List<List<BoardSpace>>>(emptyList())
+    val board: StateFlow<List<List<BoardSpace>>> = _board.asStateFlow()
+
+    private val _selectedCardId = MutableStateFlow<Int?>(null)
+    val selectedCardId: StateFlow<Int?> = _selectedCardId.asStateFlow()
+
+    private val _sequenceCounts = MutableStateFlow<Map<TeamColor, Int>>(emptyMap())
+    val sequenceCounts: StateFlow<Map<TeamColor, Int>> = _sequenceCounts.asStateFlow()
+
     val currentPlayer: Player get() = players.getOrElse(currentPlayerIndex) { Player(0, TeamColor.NONE, false) }
     private val requiredSequences: Int get() = if (numberOfTeams == 2) 2 else 1
 
@@ -222,7 +240,14 @@ class GameViewModel : ViewModel() {
     private fun playerHasLegalMove(player: Player): Boolean { val spaces = _board.value.flatten(); return player.hand.any { card -> spaces.any { space -> isLegalDestination(card, space, player.team) } } }
     private fun checkForDraw(prefix: String = ""): Boolean {
         if (winnerTeam != null) return false
-        if (players.all { it.hand.isEmpty() } || (deck.isEmpty() && players.none(::playerHasLegalMove))) { isDraw = true; currentGameState = GameState.FINISHED; gameMessage = "${if (prefix.isNotEmpty()) "$prefix " else ""}Draw: the draw pile is empty and no legal moves remain."; cpuJob?.cancel(); return true }
+        if (players.all { it.hand.isEmpty() } || (deck.isEmpty() && players.none(::playerHasLegalMove))) {
+            isDraw = true
+            currentGameState = GameState.FINISHED
+            val prefixStr = if (prefix.isNotEmpty()) "$prefix " else ""
+            gameMessage = "${prefixStr}Draw: the draw pile is empty and no legal moves remain."
+            cpuJob?.cancel()
+            return true
+        }
         return false
     }
     private fun advanceTurn(prefix: String = "") {
@@ -291,11 +316,23 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().background(Color(0xFFF1F3F4)).padding(5.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 3.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text(text = gameViewModel.gameMessage, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, maxLines = 2) }
-            Row(verticalAlignment = Alignment.CenterVertically) { Text(text = "${sequenceCounts[player.team] ?: 0}/${if (gameViewModel.numberOfTeams == 2) 2 else 1}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, modifier = Modifier.padding(end = 8.dp)); TextButton(onClick = onExit) { Text(text = "Exit", color = Color.Red) } }
+            Row(verticalAlignment = Alignment.CenterVertically) { 
+                val currentSeq = sequenceCounts[player.team] ?: 0
+                val targetSeq = if (gameViewModel.numberOfTeams == 2) 2 else 1
+                val seqStr = "$currentSeq/$targetSeq"
+                Text(text = seqStr, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, modifier = Modifier.padding(end = 8.dp)); 
+                TextButton(onClick = onExit) { Text(text = "Exit", color = Color.Red) } 
+            }
         }
         if (board.isNotEmpty()) { LazyVerticalGrid(columns = GridCells.Fixed(10), modifier = Modifier.fillMaxWidth().weight(1f), userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) { items(board.flatten(), key = { it.row * 10 + it.col }) { space -> BoardCard(space) { gameViewModel.humanPlaceToken(space.row, space.col) } } } }
         Spacer(Modifier.height(4.dp))
-        if (!player.isCpu) { Text(text = if (selectedCardId == null) "Select a card to show legal moves" else "Green spaces are legal moves", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23)); PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard) } else { Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { Text(text = "CPU cards are hidden", color = Color.Gray) } }
+        if (!player.isCpu) { 
+            val hintString = if (selectedCardId == null) "Select a card to show legal moves" else "Green spaces are legal moves"
+            Text(text = hintString, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23)); 
+            PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard) 
+        } else { 
+            Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { Text(text = "CPU cards are hidden", color = Color.Gray) } 
+        }
     }
 }
 @Composable
@@ -330,8 +367,15 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
 fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     val counts by gameViewModel.sequenceCounts.collectAsState(); val winner = gameViewModel.winnerTeam; val background = if (gameViewModel.isDraw || winner == null) Color(0xFFE7E7E7) else winner.uiColor.copy(alpha = 0.15f)
     Column(Modifier.fillMaxSize().background(background).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = if (gameViewModel.isDraw) "DRAW" else "WINNER", fontSize = 42.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
-        if (winner != null) { Text(text = "Team ${winner.name}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = winner.uiColor); Text(text = "Completed sequences: ${counts[winner] ?: 0}", fontSize = 18.sp) } else { Text(text = "No legal moves remain.", fontSize = 20.sp, textAlign = TextAlign.Center) }
+        val titleText = if (gameViewModel.isDraw) "DRAW" else "WINNER"
+        Text(text = titleText, fontSize = 42.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
+        if (winner != null) { 
+            Text(text = "Team ${winner.name}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = winner.uiColor); 
+            val countStr = "${counts[winner] ?: 0}"
+            Text(text = "Completed sequences: $countStr", fontSize = 18.sp) 
+        } else { 
+            Text(text = "No legal moves remain.", fontSize = 20.sp, textAlign = TextAlign.Center) 
+        }
         Spacer(Modifier.height(16.dp)); Text(text = gameViewModel.gameMessage, textAlign = TextAlign.Center, color = Color.DarkGray); Spacer(Modifier.height(32.dp))
         Button(onClick = gameViewModel::newGame) { Text(text = "NEW GAME") }; TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { Text(text = "Back to Main Menu", color = Color.Red) }
     }
@@ -751,9 +795,11 @@ fun OnlineEnterNameScreen(vm: MultiplayerViewModel) {
 fun OnlineCreateScreen(vm: MultiplayerViewModel) {
     var password by remember { mutableStateOf("") }; var teams by remember { mutableStateOf(2) }
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(text = "Room Code: ${vm.roomCode}", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        val rc = vm.roomCode
+        Text(text = "Room Code: $rc", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
         OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Optional Password") }, modifier = Modifier.padding(vertical = 8.dp))
-        Text(text = "Teams: $teams", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+        val tCountStr = "$teams"
+        Text(text = "Teams: $tCountStr", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf(2, 3).forEach { tCount -> Button(onClick = { teams = tCount }, colors = ButtonDefaults.buttonColors(containerColor = if (teams == tCount) Color.Blue else Color.Gray)) { Text(text = tCount.toString()) } } }
         Spacer(Modifier.height(32.dp))
         Button(onClick = { vm.executeCreateRoom(password, teams) }) { Text(text = "Open Lobby") }
@@ -783,7 +829,8 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val context = LocalContext.current
 
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(text = "Room Code: ${room.roomId}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        val rc = room.roomId
+        Text(text = "Room Code: $rc", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
         
         if (isHost) {
             TextButton(onClick = {
@@ -792,7 +839,8 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             }) { Text(text = "Share via WhatsApp", color = Color(0xFF25D366), fontWeight = FontWeight.Bold) }
         }
 
-        Text(text = "Players Joined (${room.players.size}):", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+        val pCountStr = "Players Joined (${room.players.size}):"
+        Text(text = pCountStr, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
 
         room.players.forEach { p ->
             val isOnline = room.presence[p.playerName] == true
@@ -800,7 +848,8 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                 if(isHost) { Box(Modifier.size(16.dp).clip(CircleShape).background(teamCol).border(1.dp, Color.Black, CircleShape).clickable { vm.cycleTeamColor(p.team) }) }
                 Spacer(Modifier.width(8.dp))
-                Text(text = "- ${p.playerName} (${p.team})", fontSize = 16.sp, color = if (isOnline) teamCol else Color.Gray, modifier = Modifier.weight(1f))
+                val pStr = "- ${p.playerName} (${p.team})"
+                Text(text = pStr, fontSize = 16.sp, color = if (isOnline) teamCol else Color.Gray, modifier = Modifier.weight(1f))
                 
                 if (!isOnline) Text(text = "(Offline) ", fontSize = 12.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                 if (isHost && p.playerName != vm.playerName) {
@@ -856,11 +905,14 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 15.sp)
-                    Text(text = "Room: ${room.roomId} | You: ${vm.playerName}", fontSize = 11.sp, color = Color.Gray)
+                    val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
+                    Text(text = rInfo, fontSize = 11.sp, color = Color.Gray)
                 }
-                Text(text = String.format("%02d:%02d", matchSeconds / 60, matchSeconds % 60), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray, modifier = Modifier.padding(horizontal = 8.dp))
+                val tStr = String.format("%02d:%02d", matchSeconds / 60, matchSeconds % 60)
+                Text(text = tStr, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray, modifier = Modifier.padding(horizontal = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "$teamSequences/$reqSequences", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = myTeamColor, modifier = Modifier.padding(end = 8.dp))
+                    val sStr = "$teamSequences/$reqSequences"
+                    Text(text = sStr, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = myTeamColor, modifier = Modifier.padding(end = 8.dp))
                     TextButton(onClick = { vm.syncPresence() }, modifier = Modifier.padding(end = 4.dp)) { Text(text = "Sync") }
                     TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Exit", color = Color.Red) }
                 }
@@ -908,7 +960,9 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                     val isOnline = room.presence[p.playerName] == true; val pColor = Color(room.teamColors[p.team] ?: TEAM_COLORS[0]); val isThisTurn = p.playerId == room.turnPlayerId
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(if (isThisTurn) pColor.copy(alpha = 0.15f) else Color.Transparent, MaterialTheme.shapes.extraSmall).border(if (isThisTurn) 1.dp else 0.dp, if (isThisTurn) pColor else Color.Transparent, MaterialTheme.shapes.extraSmall).padding(horizontal = 4.dp, vertical = 2.dp)) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(if(isOnline) pColor else Color.Gray).border(0.5.dp, Color.Black, CircleShape))
-                        Spacer(Modifier.width(4.dp)); Text(text = if(isOnline) p.playerName else "${p.playerName} (CPU)", fontSize = 11.sp, fontWeight = if (isThisTurn) FontWeight.Bold else FontWeight.Normal, color = if (!isOnline) Color.Gray else if (isThisTurn) Color.Black else Color.DarkGray)
+                        Spacer(Modifier.width(4.dp))
+                        val pName = if(isOnline) p.playerName else "${p.playerName} (CPU)"
+                        Text(text = pName, fontSize = 11.sp, fontWeight = if (isThisTurn) FontWeight.Bold else FontWeight.Normal, color = if (!isOnline) Color.Gray else if (isThisTurn) Color.Black else Color.DarkGray)
                         if(!isOnline && isThisTurn && room.status == "PLAYING" && (myPlayer?.team == p.team || vm.playerName == room.hostName)) {
                             Spacer(Modifier.width(4.dp)); Button(onClick = { vm.triggerCpuTurn(p.playerId) }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(2.dp)) { Text(text = "Play CPU", fontSize = 9.sp) }
                         }
@@ -937,14 +991,15 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable(enabled=false){}, contentAlignment = Alignment.Center) {
                 Card(Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f).padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "${room.winnerTeam} WINS MATCH ${room.matchNumber}!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]))
+                        val winStr = "${room.winnerTeam} WINS MATCH ${room.matchNumber}!"
+                        Text(text = winStr, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]))
                         if(room.consecutiveWins >= 3 && room.lastWinningTeam == room.winnerTeam) Text(text = "HAT-TRICK WINNER!", fontSize = 18.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(16.dp))
                         
                         Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         LazyColumn(Modifier.fillMaxWidth().weight(1f).border(1.dp, Color.LightGray).padding(4.dp)) {
                             item { Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { Text(text = "Player", Modifier.weight(1f), fontSize=12.sp); Text(text = "Secs", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "Wild", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "Rem", Modifier.weight(0.5f), fontSize=12.sp) } }
-                            items(room.players) { p -> Row(Modifier.fillMaxWidth().padding(4.dp)) { Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0])); Text(text = "${p.timePlayedMs/1000}s", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "${p.wildUsed}", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "${p.removeUsed}", Modifier.weight(0.5f), fontSize=12.sp) } }
+                            items(room.players) { p -> Row(Modifier.fillMaxWidth().padding(4.dp)) { Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0])); val secStr = "${p.timePlayedMs/1000}s"; Text(text = secStr, Modifier.weight(0.5f), fontSize=12.sp); val wStr = "${p.wildUsed}"; Text(text = wStr, Modifier.weight(0.5f), fontSize=12.sp); val rStr = "${p.removeUsed}"; Text(text = rStr, Modifier.weight(0.5f), fontSize=12.sp) } }
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -954,7 +1009,8 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
                         Spacer(Modifier.height(16.dp))
                         if(room.rematchVotes[vm.playerName] != true) {
-                            Button(onClick = { vm.voteRematch(true) }) { Text(text = "Ready for Match ${room.matchNumber+1}") }
+                            val readyStr = "Ready for Match ${room.matchNumber+1}"
+                            Button(onClick = { vm.voteRematch(true) }) { Text(text = readyStr) }
                         } else { Text(text = "Waiting for Host...", color = Color.Gray, fontWeight = FontWeight.Bold) }
                         
                         if(vm.playerName == room.hostName) {

@@ -1,11 +1,7 @@
 package com.ferhatozcelik.jetpackcomposetemplate.ui.activitys
 
-import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -836,17 +832,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     LaunchedEffect(room.status, room.matchStartTime) {
         if(room.status == "PLAYING" && room.matchStartTime > 0) {
             while(true) { matchSeconds = (System.currentTimeMillis() - room.matchStartTime) / 1000; delay(1000) }
-        }
-    }
-
-    val context = LocalContext.current
-    LaunchedEffect(isMyTurn) {
-        if (isMyTurn) {
-            try {
-                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 150, 100, 150), -1))
-                else vibrator.vibrate(longArrayOf(0, 150, 100, 150), -1)
-            } catch(e: Exception){}
         }
     }
 

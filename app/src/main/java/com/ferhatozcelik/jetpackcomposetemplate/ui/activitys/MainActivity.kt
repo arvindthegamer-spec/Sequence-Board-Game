@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ferhatozcelik.jetpackcomposetemplate.R
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
@@ -92,13 +91,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color(0xFFF1F3F4)), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("SEQUENCE", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-        Text("Board Game", fontSize = 20.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 48.dp))
-        Button(onClick = onPlayLocal, modifier = Modifier.fillMaxWidth(0.7f).height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { Text("Play Local (Pass & Play / CPU)", fontSize = 16.sp) }
+        Text(text = "SEQUENCE", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        Text(text = "Board Game", fontSize = 20.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 48.dp))
+        Button(onClick = onPlayLocal, modifier = Modifier.fillMaxWidth(0.7f).height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { Text(text = "Play Local (Pass & Play / CPU)", fontSize = 16.sp) }
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onPlayOnline, modifier = Modifier.fillMaxWidth(0.7f).height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))) { Text("Play Online (With Friends)", fontSize = 16.sp) }
+        Button(onClick = onPlayOnline, modifier = Modifier.fillMaxWidth(0.7f).height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))) { Text(text = "Play Online (With Friends)", fontSize = 16.sp) }
         Spacer(modifier = Modifier.height(64.dp))
-        Text("Developed by Aravind Valluri", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium)
+        Text(text = "Developed by Aravind Valluri", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -269,25 +268,25 @@ fun SetupScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     val supportedPlayers = listOf(2, 3, 4, 6, 8, 9, 10, 12); val availableTeams = when (totalPlayers) { 3, 9 -> listOf(3); 6, 12 -> listOf(2, 3); else -> listOf(2) }
     val effectiveTeams = if (teams in availableTeams) teams else availableTeams.first(); val effectiveHumans = humans.coerceAtMost(totalPlayers)
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Five Line Cards", fontSize = 30.sp, fontWeight = FontWeight.Bold); Text("Classic local play with optional CPU players", color = Color.Gray); Spacer(Modifier.height(24.dp))
-        Text("Total players: $totalPlayers", fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { supportedPlayers.forEach { count -> TextButton(onClick = { totalPlayers = count; humans = humans.coerceAtMost(count); teams = when (count) { 3, 9 -> 3; else -> if (teams == 3 && count !in listOf(6, 12)) 2 else teams } }) { Text(count.toString(), color = if (count == totalPlayers) Color(0xFF1976D2) else Color.Gray, fontWeight = if (count == totalPlayers) FontWeight.Bold else FontWeight.Normal) } } }
-        Text("Teams: $effectiveTeams", fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { availableTeams.forEach { count -> Button(onClick = { teams = count }, colors = ButtonDefaults.buttonColors(containerColor = if (effectiveTeams == count) Color(0xFF1976D2) else Color.Gray)) { Text(count.toString()) } } }
-        Spacer(Modifier.height(12.dp)); Text("Human players: $effectiveHumans", fontWeight = FontWeight.Bold); Text("Remaining players are CPU-controlled", fontSize = 12.sp, color = Color.Gray)
-        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { (1..totalPlayers).forEach { count -> TextButton(onClick = { humans = count }) { Text(count.toString(), color = if (effectiveHumans == count) Color(0xFF1976D2) else Color.Gray) } } }
+        Text(text = "Five Line Cards", fontSize = 30.sp, fontWeight = FontWeight.Bold); Text(text = "Classic local play with optional CPU players", color = Color.Gray); Spacer(Modifier.height(24.dp))
+        Text(text = "Total players: $totalPlayers", fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { supportedPlayers.forEach { count -> TextButton(onClick = { totalPlayers = count; humans = humans.coerceAtMost(count); teams = when (count) { 3, 9 -> 3; else -> if (teams == 3 && count !in listOf(6, 12)) 2 else teams } }) { Text(text = count.toString(), color = if (count == totalPlayers) Color(0xFF1976D2) else Color.Gray, fontWeight = if (count == totalPlayers) FontWeight.Bold else FontWeight.Normal) } } }
+        Text(text = "Teams: $effectiveTeams", fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { availableTeams.forEach { count -> Button(onClick = { teams = count }, colors = ButtonDefaults.buttonColors(containerColor = if (effectiveTeams == count) Color(0xFF1976D2) else Color.Gray)) { Text(text = count.toString()) } } }
+        Spacer(Modifier.height(12.dp)); Text(text = "Human players: $effectiveHumans", fontWeight = FontWeight.Bold); Text(text = "Remaining players are CPU-controlled", fontSize = 12.sp, color = Color.Gray)
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { (1..totalPlayers).forEach { count -> TextButton(onClick = { humans = count }) { Text(text = count.toString(), color = if (effectiveHumans == count) Color(0xFF1976D2) else Color.Gray) } } }
         Spacer(Modifier.height(24.dp))
-        Button(onClick = { gameViewModel.setupGame(totalPlayers, effectiveHumans, effectiveTeams) }, modifier = Modifier.fillMaxWidth(0.7f).height(52.dp)) { Text("START GAME", fontSize = 17.sp) }
-        TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { Text("Back to Main Menu", color = Color.Red) }
+        Button(onClick = { gameViewModel.setupGame(totalPlayers, effectiveHumans, effectiveTeams) }, modifier = Modifier.fillMaxWidth(0.7f).height(52.dp)) { Text(text = "START GAME", fontSize = 17.sp) }
+        TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { Text(text = "Back to Main Menu", color = Color.Red) }
     }
 }
 @Composable
 fun PassDeviceScreen(gameViewModel: GameViewModel) {
     val next = gameViewModel.currentPlayer
     Column(Modifier.fillMaxSize().background(next.team.uiColor.copy(alpha = 0.13f)).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(gameViewModel.gameMessage, color = Color.DarkGray, textAlign = TextAlign.Center); Spacer(Modifier.height(28.dp)); Text("Pass the device to", fontSize = 23.sp)
-        Text("Player ${next.id}", fontSize = 46.sp, fontWeight = FontWeight.Bold, color = next.team.uiColor); Text("Team ${next.team.name}", fontSize = 18.sp); Spacer(Modifier.height(40.dp))
-        Button(onClick = gameViewModel::confirmPassDevice, modifier = Modifier.fillMaxWidth(0.65f).height(58.dp)) { Text("I'M READY", fontSize = 19.sp) }
+        Text(text = gameViewModel.gameMessage, color = Color.DarkGray, textAlign = TextAlign.Center); Spacer(Modifier.height(28.dp)); Text(text = "Pass the device to", fontSize = 23.sp)
+        Text(text = "Player ${next.id}", fontSize = 46.sp, fontWeight = FontWeight.Bold, color = next.team.uiColor); Text(text = "Team ${next.team.name}", fontSize = 18.sp); Spacer(Modifier.height(40.dp))
+        Button(onClick = gameViewModel::confirmPassDevice, modifier = Modifier.fillMaxWidth(0.65f).height(58.dp)) { Text(text = "I'M READY", fontSize = 19.sp) }
     }
 }
 @Composable
@@ -295,12 +294,12 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     val board by gameViewModel.board.collectAsState(); val selectedCardId by gameViewModel.selectedCardId.collectAsState(); val sequenceCounts by gameViewModel.sequenceCounts.collectAsState(); val player = gameViewModel.currentPlayer
     Column(Modifier.fillMaxSize().background(Color(0xFFF1F3F4)).padding(5.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 3.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text(gameViewModel.gameMessage, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, maxLines = 2) }
-            Row(verticalAlignment = Alignment.CenterVertically) { Text("${sequenceCounts[player.team] ?: 0}/${if (gameViewModel.numberOfTeams == 2) 2 else 1}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, modifier = Modifier.padding(end = 8.dp)); TextButton(onClick = onExit) { Text("Exit", color = Color.Red) } }
+            Column(Modifier.weight(1f)) { Text(text = gameViewModel.gameMessage, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, maxLines = 2) }
+            Row(verticalAlignment = Alignment.CenterVertically) { Text(text = "${sequenceCounts[player.team] ?: 0}/${if (gameViewModel.numberOfTeams == 2) 2 else 1}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, modifier = Modifier.padding(end = 8.dp)); TextButton(onClick = onExit) { Text(text = "Exit", color = Color.Red) } }
         }
         if (board.isNotEmpty()) { LazyVerticalGrid(columns = GridCells.Fixed(10), modifier = Modifier.fillMaxWidth().weight(1f), userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) { items(board.flatten(), key = { it.row * 10 + it.col }) { space -> BoardCard(space) { gameViewModel.humanPlaceToken(space.row, space.col) } } } }
         Spacer(Modifier.height(4.dp))
-        if (!player.isCpu) { Text(if (selectedCardId == null) "Select a card to show legal moves" else "Green spaces are legal moves", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23)); PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard) } else { Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { Text("CPU cards are hidden", color = Color.Gray) } }
+        if (!player.isCpu) { Text(text = if (selectedCardId == null) "Select a card to show legal moves" else "Green spaces are legal moves", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23)); PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard) } else { Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { Text(text = "CPU cards are hidden", color = Color.Gray) } }
     }
 }
 @Composable
@@ -308,9 +307,9 @@ private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
     val bg = when { space.card.rank == Rank.CORNER -> Color(0xFFFFD75E); space.isHighlighted -> Color(0xFF9EE6AC); space.isCompletedSequence -> space.occupant.uiColor.copy(alpha = 0.18f); else -> Color.White }
     val borderC = when { space.isHighlighted -> Color(0xFF07852B); space.isCompletedSequence -> space.occupant.uiColor; else -> Color(0xFF777777) }
     Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.68f).background(bg, MaterialTheme.shapes.extraSmall).border(if (space.isHighlighted || space.isCompletedSequence) 2.dp else 0.6.dp, borderC, MaterialTheme.shapes.extraSmall).clickable(enabled = space.isHighlighted, onClick = onClick).padding(1.dp)) {
-        if (space.card.rank == Rank.CORNER) { Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) { Text("★", fontSize = 12.sp, color = Color(0xFF6D4C00)); Text("FREE", fontSize = 6.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6D4C00)) } }
-        else { Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) { Text(space.card.rank.text, fontSize = 10.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, color = space.card.suit.color); Text(space.card.suit.symbol, fontSize = 9.sp, lineHeight = 9.sp, color = space.card.suit.color) } }
-        if (space.occupant != TeamColor.NONE) { Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f).clip(CircleShape).background(space.occupant.uiColor.copy(alpha = if (space.isCompletedSequence) 0.62f else 0.9f)).border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) { if (space.isCompletedSequence) { Text("✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White) } } }
+        if (space.card.rank == Rank.CORNER) { Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) { Text(text = "★", fontSize = 12.sp, color = Color(0xFF6D4C00)); Text(text = "FREE", fontSize = 6.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6D4C00)) } }
+        else { Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) { Text(text = space.card.rank.text, fontSize = 10.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, color = space.card.suit.color); Text(text = space.card.suit.symbol, fontSize = 9.sp, lineHeight = 9.sp, color = space.card.suit.color) } }
+        if (space.occupant != TeamColor.NONE) { Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f).clip(CircleShape).background(space.occupant.uiColor.copy(alpha = if (space.isCompletedSequence) 0.62f else 0.9f)).border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) { if (space.isCompletedSequence) { Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White) } } }
         if (space.isHighlighted) { Box(Modifier.align(Alignment.BottomEnd).padding(2.dp).size(6.dp).clip(CircleShape).background(Color(0xFF07852B))) }
     }
 }
@@ -322,23 +321,23 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
                 val selected = card.uniqueId == selectedCardId
                 Card(modifier = Modifier.weight(1f).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small).clickable { onSelect(card.uniqueId) }, colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(card.rank.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = card.suit.color); Text(card.suit.symbol, fontSize = 14.sp, color = card.suit.color)
-                        when { card.isTwoEyedJack -> Text("WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold); card.isOneEyedJack -> Text("REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold) }
+                        Text(text = card.rank.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = card.suit.color); Text(text = card.suit.symbol, fontSize = 14.sp, color = card.suit.color)
+                        when { card.isTwoEyedJack -> Text(text = "WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold); card.isOneEyedJack -> Text(text = "REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold) }
                     }
                 }
             }
         }
-        OutlinedButton(onClick = onReplaceDeadCard, enabled = selectedCardId != null) { Text("Replace selected dead card", fontSize = 12.sp) }
+        OutlinedButton(onClick = onReplaceDeadCard, enabled = selectedCardId != null) { Text(text = "Replace selected dead card", fontSize = 12.sp) }
     }
 }
 @Composable
 fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     val counts by gameViewModel.sequenceCounts.collectAsState(); val winner = gameViewModel.winnerTeam; val background = if (gameViewModel.isDraw || winner == null) Color(0xFFE7E7E7) else winner.uiColor.copy(alpha = 0.15f)
     Column(Modifier.fillMaxSize().background(background).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(if (gameViewModel.isDraw) "DRAW" else "WINNER", fontSize = 42.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
-        if (winner != null) { Text("Team ${winner.name}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = winner.uiColor); Text("Completed sequences: ${counts[winner] ?: 0}", fontSize = 18.sp) } else { Text("No legal moves remain.", fontSize = 20.sp, textAlign = TextAlign.Center) }
-        Spacer(Modifier.height(16.dp)); Text(gameViewModel.gameMessage, textAlign = TextAlign.Center, color = Color.DarkGray); Spacer(Modifier.height(32.dp))
-        Button(onClick = gameViewModel::newGame) { Text("NEW GAME") }; TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { Text("Back to Main Menu", color = Color.Red) }
+        Text(text = if (gameViewModel.isDraw) "DRAW" else "WINNER", fontSize = 42.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
+        if (winner != null) { Text(text = "Team ${winner.name}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = winner.uiColor); Text(text = "Completed sequences: ${counts[winner] ?: 0}", fontSize = 18.sp) } else { Text(text = "No legal moves remain.", fontSize = 20.sp, textAlign = TextAlign.Center) }
+        Spacer(Modifier.height(16.dp)); Text(text = gameViewModel.gameMessage, textAlign = TextAlign.Center, color = Color.DarkGray); Spacer(Modifier.height(32.dp))
+        Button(onClick = gameViewModel::newGame) { Text(text = "NEW GAME") }; TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { Text(text = "Back to Main Menu", color = Color.Red) }
     }
 }
 
@@ -729,9 +728,9 @@ fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = view
 @Composable
 fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("Online Multiplayer", fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 32.dp))
-        Button(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME; vm.lobbyError = "" }, modifier = Modifier.fillMaxWidth(0.6f).padding(8.dp)) { Text("Play Online") }
-        TextButton(onClick = onExit, modifier = Modifier.padding(top = 32.dp)) { Text("Back to Main Menu", color = Color.Red) }
+        Text(text = "Online Multiplayer", fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 32.dp))
+        Button(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME; vm.lobbyError = "" }, modifier = Modifier.fillMaxWidth(0.6f).padding(8.dp)) { Text(text = "Play Online") }
+        TextButton(onClick = onExit, modifier = Modifier.padding(top = 32.dp)) { Text(text = "Back to Main Menu", color = Color.Red) }
     }
 }
 
@@ -740,14 +739,14 @@ fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 fun OnlineEnterNameScreen(vm: MultiplayerViewModel) {
     var nameInput by remember { mutableStateOf(vm.playerName) }
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("Enter Your Name", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        OutlinedTextField(value = nameInput, onValueChange = { nameInput = it }, label = { Text("Display Name") }, modifier = Modifier.padding(vertical = 16.dp))
+        Text(text = "Enter Your Name", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = nameInput, onValueChange = { nameInput = it }, label = { Text(text = "Display Name") }, modifier = Modifier.padding(vertical = 16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.proceedToCreate(nameInput) }) { Text("Create Room") }
-            Button(onClick = { vm.proceedToJoin(nameInput) }) { Text("Join Room") }
+            Button(onClick = { vm.proceedToCreate(nameInput) }) { Text(text = "Create Room") }
+            Button(onClick = { vm.proceedToJoin(nameInput) }) { Text(text = "Join Room") }
         }
-        TextButton(onClick = { vm.currentAppState = OnlineAppState.LOBBY }) { Text("Back") }
-        if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.LOBBY }) { Text(text = "Back") }
+        if (vm.lobbyError.isNotEmpty()) Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -756,14 +755,14 @@ fun OnlineEnterNameScreen(vm: MultiplayerViewModel) {
 fun OnlineCreateScreen(vm: MultiplayerViewModel) {
     var password by remember { mutableStateOf("") }; var teams by remember { mutableStateOf(2) }
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("Room Code: ${vm.roomCode}", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Optional Password") }, modifier = Modifier.padding(vertical = 8.dp))
-        Text("Teams: $teams", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf(2, 3).forEach { tCount -> Button(onClick = { teams = tCount }, colors = ButtonDefaults.buttonColors(containerColor = if (teams == tCount) Color.Blue else Color.Gray)) { Text(tCount.toString()) } } }
+        Text(text = "Room Code: ${vm.roomCode}", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Optional Password") }, modifier = Modifier.padding(vertical = 8.dp))
+        Text(text = "Teams: $teams", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf(2, 3).forEach { tCount -> Button(onClick = { teams = tCount }, colors = ButtonDefaults.buttonColors(containerColor = if (teams == tCount) Color.Blue else Color.Gray)) { Text(text = tCount.toString()) } } }
         Spacer(Modifier.height(32.dp))
-        Button(onClick = { vm.executeCreateRoom(password, teams) }) { Text("Open Lobby") }
-        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text("Cancel") }
-        if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        Button(onClick = { vm.executeCreateRoom(password, teams) }) { Text(text = "Open Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text(text = "Cancel") }
+        if (vm.lobbyError.isNotEmpty()) Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -772,12 +771,12 @@ fun OnlineCreateScreen(vm: MultiplayerViewModel) {
 fun OnlineJoinScreen(vm: MultiplayerViewModel) {
     var code by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("Join Friend's Room", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        OutlinedTextField(value = code, onValueChange = { code = it }, label = { Text("4-Digit Room Code") })
-        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password (if any)") }, modifier = Modifier.padding(vertical = 12.dp))
-        Button(onClick = { vm.joinRoom(code, password) }) { Text("Join Lobby") }
-        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text("Cancel") }
-        if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        Text(text = "Join Friend's Room", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = code, onValueChange = { code = it }, label = { Text(text = "4-Digit Room Code") })
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Password (if any)") }, modifier = Modifier.padding(vertical = 12.dp))
+        Button(onClick = { vm.joinRoom(code, password) }) { Text(text = "Join Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text(text = "Cancel") }
+        if (vm.lobbyError.isNotEmpty()) Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -788,16 +787,16 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val context = LocalContext.current
 
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("Room Code: ${room.roomId}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        Text(text = "Room Code: ${room.roomId}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
         
         if (isHost) {
             TextButton(onClick = {
                 val sendIntent = Intent().apply { action = Intent.ACTION_SEND; putExtra(Intent.EXTRA_TEXT, "Join my Sequence match! Code: ${room.roomId}"); type = "text/plain"; setPackage("com.whatsapp") }
                 try { context.startActivity(sendIntent) } catch(e: Exception) { /* No whatsapp */ }
-            }) { Text("Share via WhatsApp", color = Color(0xFF25D366), fontWeight = FontWeight.Bold) }
+            }) { Text(text = "Share via WhatsApp", color = Color(0xFF25D366), fontWeight = FontWeight.Bold) }
         }
 
-        Text("Players Joined (${room.players.size}):", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+        Text(text = "Players Joined (${room.players.size}):", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
 
         room.players.forEach { p ->
             val isOnline = room.presence[p.playerName] == true
@@ -805,24 +804,24 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                 if(isHost) { Box(Modifier.size(16.dp).clip(CircleShape).background(teamCol).border(1.dp, Color.Black, CircleShape).clickable { vm.cycleTeamColor(p.team) }) }
                 Spacer(Modifier.width(8.dp))
-                Text("- ${p.playerName} (${p.team})", fontSize = 16.sp, color = if (isOnline) teamCol else Color.Gray, modifier = Modifier.weight(1f))
+                Text(text = "- ${p.playerName} (${p.team})", fontSize = 16.sp, color = if (isOnline) teamCol else Color.Gray, modifier = Modifier.weight(1f))
                 
-                if (!isOnline) Text("(Offline) ", fontSize = 12.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                if (!isOnline) Text(text = "(Offline) ", fontSize = 12.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                 if (isHost && p.playerName != vm.playerName) {
-                    Button(onClick = { vm.changePlayerTeam(p.playerId) }, modifier = Modifier.height(30.dp), contentPadding = PaddingValues(4.dp)) { Text("Team", fontSize = 10.sp) }
+                    Button(onClick = { vm.changePlayerTeam(p.playerId) }, modifier = Modifier.height(30.dp), contentPadding = PaddingValues(4.dp)) { Text(text = "Team", fontSize = 10.sp) }
                     Spacer(Modifier.width(4.dp))
-                    Button(onClick = { vm.kickPlayer(p.playerId) }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.height(30.dp), contentPadding = PaddingValues(4.dp)) { Text("X", fontSize = 10.sp) }
+                    Button(onClick = { vm.kickPlayer(p.playerId) }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.height(30.dp), contentPadding = PaddingValues(4.dp)) { Text(text = "X", fontSize = 10.sp) }
                 }
             }
         }
 
-        if (vm.lobbyError.isNotEmpty()) Text(vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        if (vm.lobbyError.isNotEmpty()) Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
 
         Spacer(Modifier.height(24.dp))
-        if (isHost) { Button(onClick = { vm.hostStartGame() }) { Text("START GAME NOW") } } 
-        else { CircularProgressIndicator(); Text("Waiting for host to start...", modifier = Modifier.padding(top = 12.dp)) }
+        if (isHost) { Button(onClick = { vm.hostStartGame() }) { Text(text = "START GAME NOW") } } 
+        else { CircularProgressIndicator(); Text(text = "Waiting for host to start...", modifier = Modifier.padding(top = 12.dp)) }
 
-        TextButton(onClick = { vm.backToLobby(); onExit() }, modifier = Modifier.padding(top = 24.dp)) { Text("Leave Room", color = Color.Red) }
+        TextButton(onClick = { vm.backToLobby(); onExit() }, modifier = Modifier.padding(top = 24.dp)) { Text(text = "Leave Room", color = Color.Red) }
     }
 }
 
@@ -871,14 +870,14 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 15.sp)
-                    Text("Room: ${room.roomId} | You: ${vm.playerName}", fontSize = 11.sp, color = Color.Gray)
+                    Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 15.sp)
+                    Text(text = "Room: ${room.roomId} | You: ${vm.playerName}", fontSize = 11.sp, color = Color.Gray)
                 }
-                Text(String.format("%02d:%02d", matchSeconds / 60, matchSeconds % 60), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray, modifier = Modifier.padding(horizontal = 8.dp))
+                Text(text = String.format("%02d:%02d", matchSeconds / 60, matchSeconds % 60), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray, modifier = Modifier.padding(horizontal = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("$teamSequences/$reqSequences", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = myTeamColor, modifier = Modifier.padding(end = 8.dp))
-                    TextButton(onClick = { vm.syncPresence() }, modifier = Modifier.padding(end = 4.dp)) { Text("Sync") }
-                    TextButton(onClick = { vm.backToLobby(); onExit() }) { Text("Exit", color = Color.Red) }
+                    Text(text = "$teamSequences/$reqSequences", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = myTeamColor, modifier = Modifier.padding(end = 8.dp))
+                    TextButton(onClick = { vm.syncPresence() }, modifier = Modifier.padding(end = 4.dp)) { Text(text = "Sync") }
+                    TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Exit", color = Color.Red) }
                 }
             }
 
@@ -894,14 +893,14 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
                         Box(modifier = Modifier.aspectRatio(0.74f).padding(1.dp).background(bg).border(if (isLegalMove || space.isCompletedSequence || isLastMove) 2.dp else 1.dp, when { isLegalMove -> Color(0xFF07852B); isLastMove -> Color(0xFFFF9800); else -> Color.LightGray }).clickable(enabled = isLegalMove && isMyTurn) { vm.playCard(selectedCard!!, space.r, space.c); selectedCard = null }) {
                             Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(space.card.rank, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
-                                Text(space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
+                                Text(text = space.card.rank, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
+                                Text(text = space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
                             }
                             if (space.occupant != "NONE") {
                                 val chipAlpha = if (space.isCompletedSequence) 0.62f else 0.9f
                                 val cColor = Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha = chipAlpha)
                                 Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f).clip(CircleShape).background(cColor).border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) {
-                                    if (space.isCompletedSequence) Text("✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    if (space.isCompletedSequence) Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         }
@@ -924,9 +923,9 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                     val isOnline = room.presence[p.playerName] == true; val pColor = Color(room.teamColors[p.team] ?: TEAM_COLORS[0]); val isThisTurn = p.playerId == room.turnPlayerId
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(if (isThisTurn) pColor.copy(alpha = 0.15f) else Color.Transparent, MaterialTheme.shapes.extraSmall).border(if (isThisTurn) 1.dp else 0.dp, if (isThisTurn) pColor else Color.Transparent, MaterialTheme.shapes.extraSmall).padding(horizontal = 4.dp, vertical = 2.dp)) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(if(isOnline) pColor else Color.Gray).border(0.5.dp, Color.Black, CircleShape))
-                        Spacer(Modifier.width(4.dp)); Text(text = if(isOnline) p.playerName else p.playerName, fontSize = 11.sp, fontWeight = if (isThisTurn) FontWeight.Bold else FontWeight.Normal, color = if (!isOnline) Color.Gray else if (isThisTurn) Color.Black else Color.DarkGray)
+                        Spacer(Modifier.width(4.dp)); Text(text = if(isOnline) p.playerName else "${p.playerName} (CPU)", fontSize = 11.sp, fontWeight = if (isThisTurn) FontWeight.Bold else FontWeight.Normal, color = if (!isOnline) Color.Gray else if (isThisTurn) Color.Black else Color.DarkGray)
                         if(!isOnline && isThisTurn && room.status == "PLAYING" && (myPlayer?.team == p.team || vm.playerName == room.hostName)) {
-                            Spacer(Modifier.width(4.dp)); Button(onClick = { vm.triggerCpuTurn(p.playerId) }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(2.dp)) { Text("Play CPU", fontSize = 9.sp) }
+                            Spacer(Modifier.width(4.dp)); Button(onClick = { vm.triggerCpuTurn(p.playerId) }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(2.dp)) { Text(text = "Play CPU", fontSize = 9.sp) }
                         }
                     }
                 }
@@ -938,14 +937,14 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                         val selected = card == selectedCard
                         Card(modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small).clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text(card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
-                                Text(card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
-                                when { card.isTwoEyedJack -> Text("WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold); card.isOneEyedJack -> Text("REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold) }
+                                Text(text = card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
+                                Text(text = card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
+                                when { card.isTwoEyedJack -> Text(text = "WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold); card.isOneEyedJack -> Text(text = "REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold) }
                             }
                         }
                     }
                 }
-                OutlinedButton(onClick = { selectedCard?.let { vm.replaceDeadCard(it) }; selectedCard = null }, enabled = selectedCard != null && isMyTurn) { Text("Replace selected dead card", fontSize = 12.sp) }
+                OutlinedButton(onClick = { selectedCard?.let { vm.replaceDeadCard(it) }; selectedCard = null }, enabled = selectedCard != null && isMyTurn) { Text(text = "Replace selected dead card", fontSize = 12.sp) }
             }
         }
 
@@ -953,31 +952,31 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable(enabled=false){}, contentAlignment = Alignment.Center) {
                 Card(Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f).padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("${room.winnerTeam} WINS MATCH ${room.matchNumber}!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]))
-                        if(room.consecutiveWins >= 3 && room.lastWinningTeam == room.winnerTeam) Text("HAT-TRICK WINNER!", fontSize = 18.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                        Text(text = "${room.winnerTeam} WINS MATCH ${room.matchNumber}!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]))
+                        if(room.consecutiveWins >= 3 && room.lastWinningTeam == room.winnerTeam) Text(text = "HAT-TRICK WINNER!", fontSize = 18.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(16.dp))
                         
-                        Text("Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         LazyColumn(Modifier.fillMaxWidth().weight(1f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                            item { Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { Text("Player", Modifier.weight(1f), fontSize=12.sp); Text("Secs", Modifier.weight(0.5f), fontSize=12.sp); Text("Wild", Modifier.weight(0.5f), fontSize=12.sp); Text("Rem", Modifier.weight(0.5f), fontSize=12.sp) } }
-                            items(room.players) { p -> Row(Modifier.fillMaxWidth().padding(4.dp)) { Text(p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0])); Text("${p.timePlayedMs/1000}s", Modifier.weight(0.5f), fontSize=12.sp); Text("${p.wildUsed}", Modifier.weight(0.5f), fontSize=12.sp); Text("${p.removeUsed}", Modifier.weight(0.5f), fontSize=12.sp) } }
+                            item { Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { Text(text = "Player", Modifier.weight(1f), fontSize=12.sp); Text(text = "Secs", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "Wild", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "Rem", Modifier.weight(0.5f), fontSize=12.sp) } }
+                            items(room.players) { p -> Row(Modifier.fillMaxWidth().padding(4.dp)) { Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0])); Text(text = "${p.timePlayedMs/1000}s", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "${p.wildUsed}", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "${p.removeUsed}", Modifier.weight(0.5f), fontSize=12.sp) } }
                         }
                         Spacer(Modifier.height(8.dp))
-                        Text("Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         LazyColumn(Modifier.fillMaxWidth().weight(0.5f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                            items(room.matchHistory) { h -> Text(h, fontSize = 12.sp, modifier = Modifier.padding(2.dp)) }
+                            items(room.matchHistory) { h -> Text(text = h, fontSize = 12.sp, modifier = Modifier.padding(2.dp)) }
                         }
 
                         Spacer(Modifier.height(16.dp))
                         if(room.rematchVotes[vm.playerName] != true) {
-                            Button(onClick = { vm.voteRematch(true) }) { Text("Ready for Match ${room.matchNumber+1}") }
-                        } else { Text("Waiting for Host...", color = Color.Gray, fontWeight = FontWeight.Bold) }
+                            Button(onClick = { vm.voteRematch(true) }) { Text(text = "Ready for Match ${room.matchNumber+1}") }
+                        } else { Text(text = "Waiting for Host...", color = Color.Gray, fontWeight = FontWeight.Bold) }
                         
                         if(vm.playerName == room.hostName) {
                             Spacer(Modifier.height(8.dp))
-                            Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { Text("Host: Start Next Match") }
+                            Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { Text(text = "Host: Start Next Match") }
                         }
-                        Spacer(Modifier.height(8.dp)); TextButton(onClick = { vm.backToLobby(); onExit() }) { Text("Leave Room", color = Color.Red) }
+                        Spacer(Modifier.height(8.dp)); TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
                     }
                 }
             }

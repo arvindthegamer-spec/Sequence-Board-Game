@@ -983,8 +983,16 @@ class MultiplayerViewModel : ViewModel() {
         val room = _roomData.value
         if (room.hostName != playerName) return
         val currentC = room.teamColors[team] ?: TEAM_COLORS[0]
-        var nextIdx = TEAM_COLORS.indexOf(currentC) + 1
-        if(nextIdx >= TEAM_COLORS.size) nextIdx = 0
+        var nextIdx = TEAM_COLORS.indexOf(currentC)
+        if (nextIdx == -1) nextIdx = 0
+        
+        val usedColorsByOtherTeams = room.teamColors.filterKeys { it != team }.values.toSet()
+        
+        var attempts = 0
+        do {
+            nextIdx = (nextIdx + 1) % TEAM_COLORS.size
+            attempts++
+        } while (TEAM_COLORS[nextIdx] in usedColorsByOtherTeams && attempts < TEAM_COLORS.size)
         
         val mutColors = room.teamColors.toMutableMap()
         mutColors[team] = TEAM_COLORS[nextIdx]
@@ -1077,16 +1085,19 @@ class MultiplayerViewModel : ViewModel() {
                     val wasMyTurn = (_roomData.value.turnPlayerId == myPlayerId)
                     val isMyTurnNow = (room.turnPlayerId == myPlayerId && room.status == "PLAYING")
                     _roomData.value = room
+                    
                     if (room.status == "PLAYING" && currentAppState == OnlineAppState.WAITING_ROOM) {
                         currentAppState = OnlineAppState.PLAYING
                     }
                     if (!wasMyTurn && isMyTurnNow) turnStartTime = System.currentTimeMillis()
                     
-                    if (room.status != "FINISHED") {
-                        val isHostOnline = room.presence[room.hostName] == true
-                        if(!isHostOnline) {
-                            val newHost = room.players.firstOrNull { room.presence[it.playerName] == true }?.playerName
-                            if (newHost == playerName) db.child("rooms").child(roomCode).child("hostName").setValue(newHost)
+                    // Host Migration Logic
+                    val isHostOnline = room.presence[room.hostName] == true
+                    val hostStillInGame = room.players.any { it.playerName == room.hostName }
+                    if (!isHostOnline || !hostStillInGame) {
+                        val newHost = room.players.firstOrNull { room.presence[it.playerName] == true }?.playerName
+                        if (newHost != null && newHost == playerName) {
+                            db.child("rooms").child(roomCode).child("hostName").setValue(newHost)
                         }
                     }
                 }

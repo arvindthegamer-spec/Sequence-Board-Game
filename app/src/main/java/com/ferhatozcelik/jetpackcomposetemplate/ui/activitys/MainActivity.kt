@@ -1089,7 +1089,9 @@ class MultiplayerViewModel : ViewModel() {
                     if (room.status == "PLAYING" && currentAppState == OnlineAppState.WAITING_ROOM) {
                         currentAppState = OnlineAppState.PLAYING
                     }
-                    if (!wasMyTurn && isMyTurnNow) turnStartTime = System.currentTimeMillis()
+                    if (!wasMyTurn && isMyTurnNow) {
+                        turnStartTime = System.currentTimeMillis()
+                    }
                     
                     // Host Migration Logic
                     val isHostOnline = room.presence[room.hostName] == true
@@ -1225,7 +1227,10 @@ class MultiplayerViewModel : ViewModel() {
         val deckList = room.deck.toMutableList()
         if (deckList.isNotEmpty()) updatedHand.add(deckList.removeAt(0))
 
-        val timeTaken = if(isCpu) 1500L else System.currentTimeMillis() - turnStartTime
+        val currentMillis = System.currentTimeMillis()
+        val timeTaken = if (isCpu) 1500L else if (turnStartTime > 0L) currentMillis - turnStartTime else 0L
+        turnStartTime = 0L
+
         val updatedPlayers = room.players.map { p -> 
             if (p.playerId == actingPlayer.playerId) p.copy(hand = updatedHand, wildUsed = p.wildUsed + if(card.isTwoEyedJack) 1 else 0, removeUsed = p.removeUsed + if(card.isOneEyedJack) 1 else 0, timePlayedMs = p.timePlayedMs + timeTaken) else p 
         }
@@ -1241,9 +1246,16 @@ class MultiplayerViewModel : ViewModel() {
         }
 
         if (winningTeam != null) {
+            val matchTimeMs = System.currentTimeMillis() - room.matchStartTime
+            val totalMatchSecs = matchTimeMs / 1000
+            val mHr = totalMatchSecs / 3600
+            val mMin = (totalMatchSecs % 3600) / 60
+            val mSec = totalMatchSecs % 60
+            val matchTimeStr = if (mHr > 0) String.format("%02d:%02d:%02d", mHr, mMin, mSec) else String.format("%02d:%02d", mMin, mSec)
+
             val isHatTrick = (room.lastWinningTeam == winningTeam && room.consecutiveWins + 1 >= 3)
             val consec = if (room.lastWinningTeam == winningTeam) room.consecutiveWins + 1 else 1
-            val newHist = room.matchHistory.toMutableList().apply { add("Match ${room.matchNumber}: $winningTeam Won") }
+            val newHist = room.matchHistory.toMutableList().apply { add("Match ${room.matchNumber}: $winningTeam Won ($matchTimeStr)") }
             val htStr = if(isHatTrick) " HAT-TRICK!" else ""
             val winUpdates = mapOf(
                 "board" to updatedBoard, "players" to updatedPlayers, "status" to "FINISHED", 
@@ -1286,7 +1298,10 @@ class MultiplayerViewModel : ViewModel() {
         val deckList = room.deck.toMutableList()
         if (deckList.isNotEmpty()) updatedHand.add(deckList.removeAt(0))
 
-        val timeTaken = if(isCpu) 1500L else System.currentTimeMillis() - turnStartTime
+        val currentMillis = System.currentTimeMillis()
+        val timeTaken = if (isCpu) 1500L else if (turnStartTime > 0L) currentMillis - turnStartTime else 0L
+        turnStartTime = 0L
+
         val updatedPlayers = room.players.map { 
             if (it.playerId == actingPlayer.playerId) it.copy(hand = updatedHand, timePlayedMs = it.timePlayedMs + timeTaken) else it 
         }
@@ -1477,11 +1492,15 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val myPlayer = room.players.firstOrNull { it.playerName == vm.playerName }
     val isMyTurn = myPlayer != null && room.turnPlayerId == myPlayer.playerId && room.status != "FINISHED"
     var selectedCard by remember { mutableStateOf<FBCard?>(null) }
+    var showScorecard by remember { mutableStateOf(true) }
     
     var matchSeconds by remember { mutableStateOf(0L) }
     LaunchedEffect(room.status, room.matchStartTime) {
         if(room.status == "PLAYING" && room.matchStartTime > 0) {
+            showScorecard = true
             while(true) { matchSeconds = (System.currentTimeMillis() - room.matchStartTime) / 1000; delay(1000) }
+        } else if (room.status == "FINISHED") {
+            showScorecard = true
         }
     }
 
@@ -1636,67 +1655,98 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         }
 
         if (room.status == "FINISHED") {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable(enabled=false){}, contentAlignment = Alignment.Center) {
-                Card(Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f).padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        val winStr = "${room.winnerTeam} WINS MATCH ${room.matchNumber}!"
-                        Text(text = winStr, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]))
-                        if(room.consecutiveWins >= 3 && room.lastWinningTeam == room.winnerTeam) {
-                            Text(text = "HAT-TRICK WINNER!", fontSize = 18.sp, color = Color.Red, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        
-                        Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        LazyColumn(Modifier.fillMaxWidth().weight(1f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                            item { 
-                                Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { 
-                                    Text(text = "Player", Modifier.weight(1f), fontSize=12.sp)
-                                    Text(text = "Time", Modifier.weight(0.6f), fontSize=12.sp)
-                                    Text(text = "Wild", Modifier.weight(0.4f), fontSize=12.sp)
-                                    Text(text = "Rem", Modifier.weight(0.4f), fontSize=12.sp) 
-                                } 
+            if (showScorecard) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable(enabled=false){}, contentAlignment = Alignment.Center) {
+                    Card(Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.9f).padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            val winStr = "${room.winnerTeam} WINS MATCH ${room.matchNumber}!"
+                            Text(text = winStr, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]))
+                            if(room.consecutiveWins >= 3 && room.lastWinningTeam == room.winnerTeam) {
+                                Text(text = "HAT-TRICK WINNER!", fontSize = 18.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                             }
-                            items(room.players) { p -> 
-                                Row(Modifier.fillMaxWidth().padding(4.dp)) { 
-                                    Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0]))
-                                    val tSecs = p.timePlayedMs / 1000
-                                    val hr = tSecs / 3600
-                                    val min = (tSecs % 3600) / 60
-                                    val sec = tSecs % 60
-                                    val timeStr = if (hr > 0) String.format("%02d:%02d:%02d", hr, min, sec) else String.format("%02d:%02d", min, sec)
-                                    Text(text = timeStr, Modifier.weight(0.6f), fontSize=12.sp) 
-                                    val wStr = "${p.wildUsed}"
-                                    Text(text = wStr, Modifier.weight(0.4f), fontSize=12.sp) 
-                                    val rStr = "${p.removeUsed}"
-                                    Text(text = rStr, Modifier.weight(0.4f), fontSize=12.sp) 
-                                } 
+                            Spacer(Modifier.height(16.dp))
+                            
+                            Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            LazyColumn(Modifier.fillMaxWidth().weight(1f).border(1.dp, Color.LightGray).padding(4.dp)) {
+                                item { 
+                                    Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { 
+                                        Text(text = "Player", Modifier.weight(1f), fontSize=12.sp)
+                                        Text(text = "Time", Modifier.weight(0.6f), fontSize=12.sp)
+                                        Text(text = "Wild", Modifier.weight(0.4f), fontSize=12.sp)
+                                        Text(text = "Rem", Modifier.weight(0.4f), fontSize=12.sp) 
+                                    } 
+                                }
+                                items(room.players) { p -> 
+                                    Row(Modifier.fillMaxWidth().padding(4.dp)) { 
+                                        Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0]))
+                                        val tSecs = p.timePlayedMs / 1000
+                                        val hr = tSecs / 3600
+                                        val min = (tSecs % 3600) / 60
+                                        val sec = tSecs % 60
+                                        val timeStr = if (hr > 0) String.format("%02d:%02d:%02d", hr, min, sec) else String.format("%02d:%02d", min, sec)
+                                        Text(text = timeStr, Modifier.weight(0.6f), fontSize=12.sp) 
+                                        val wStr = "${p.wildUsed}"
+                                        Text(text = wStr, Modifier.weight(0.4f), fontSize=12.sp) 
+                                        val rStr = "${p.removeUsed}"
+                                        Text(text = rStr, Modifier.weight(0.4f), fontSize=12.sp) 
+                                    } 
+                                }
                             }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        LazyColumn(Modifier.fillMaxWidth().weight(0.5f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                            items(room.matchHistory) { h -> Text(text = h, fontSize = 12.sp, modifier = Modifier.padding(2.dp)) }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-                        if(room.rematchVotes[vm.playerName] != true) {
-                            val readyStr = "Ready for Match ${room.matchNumber+1}"
-                            Button(onClick = { vm.voteRematch(true) }) { Text(text = readyStr) }
-                        } else { 
-                            Text(text = "Waiting for Host...", color = Color.Gray, fontWeight = FontWeight.Bold) 
-                        }
-                        
-                        if(vm.playerName == room.hostName) {
                             Spacer(Modifier.height(8.dp))
-                            Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
-                                Text(text = "Host: Start Next Match") 
+                            Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            LazyColumn(Modifier.fillMaxWidth().weight(0.5f).border(1.dp, Color.LightGray).padding(4.dp)) {
+                                items(room.matchHistory) { h -> Text(text = h, fontSize = 12.sp, modifier = Modifier.padding(2.dp)) }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+                            
+                            val pendingPlayers = room.players.filter { room.rematchVotes[it.playerName] != true }
+                            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                                room.players.forEach { p ->
+                                    val isReady = room.rematchVotes[p.playerName] == true
+                                    val bColor = Color(room.teamColors[p.team] ?: TEAM_COLORS[0])
+                                    Box(
+                                        modifier = Modifier.size(16.dp).background(if (isReady) bColor else Color.LightGray, MaterialTheme.shapes.small)
+                                            .border(1.dp, Color.Black, MaterialTheme.shapes.small)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            if (pendingPlayers.isNotEmpty()) {
+                                val names = pendingPlayers.map { it.playerName }
+                                val verb = if (names.size == 1) "is" else "are"
+                                val waitStr = "${names.joinToString(", ")} $verb yet to join for rematch."
+                                Text(text = waitStr, fontSize = 11.sp, color = Color.Gray, textAlign = TextAlign.Center)
+                            }
+                            Spacer(Modifier.height(8.dp))
+
+                            if(room.rematchVotes[vm.playerName] != true) {
+                                val readyStr = "Ready for Match ${room.matchNumber+1}"
+                                Button(onClick = { vm.voteRematch(true) }) { Text(text = readyStr) }
+                            } else { 
+                                Text(text = "Waiting for Host...", color = Color.Gray, fontWeight = FontWeight.Bold) 
+                            }
+                            
+                            if(vm.playerName == room.hostName) {
+                                Spacer(Modifier.height(8.dp))
+                                Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
+                                    Text(text = "Host: Start Next Match") 
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync", color = Color(0xFF1976D2)) }
+                                TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }
+                                TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
                             }
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                            TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
-                            TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
-                        }
+                    }
+                }
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Button(onClick = { showScorecard = true }, modifier = Modifier.padding(top = 16.dp)) {
+                        Text(text = "Show Scorecard")
                     }
                 }
             }

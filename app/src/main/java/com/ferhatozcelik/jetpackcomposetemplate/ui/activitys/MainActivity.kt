@@ -1,7 +1,11 @@
 package com.ferhatozcelik.jetpackcomposetemplate.ui.activitys
 
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -110,35 +114,17 @@ data class CompletedLine(val team: TeamColor, val positions: Set<Pair<Int, Int>>
 enum class GameState { SETUP, PASS_DEVICE, PLAYING, FINISHED }
 
 class GameViewModel : ViewModel() {
-    private val random = Random.Default
-    private var deck = mutableListOf<PlayingCard>()
-    private var players: List<Player> = emptyList()
-    private var cpuJob: Job? = null
-
-    var currentPlayerIndex: Int by mutableStateOf(0)
-        private set
-    var currentGameState: GameState by mutableStateOf(GameState.SETUP)
-        private set
-    var gameMessage: String by mutableStateOf("Choose game settings.")
-        private set
-    var humanCount: Int by mutableStateOf(1)
-        private set
-    var numberOfTeams: Int by mutableStateOf(2)
-        private set
-    var winnerTeam: TeamColor? by mutableStateOf(null)
-        private set
-    var isDraw: Boolean by mutableStateOf(false)
-        private set
-
-    private val _board = MutableStateFlow<List<List<BoardSpace>>>(emptyList())
-    val board: StateFlow<List<List<BoardSpace>>> = _board.asStateFlow()
-
-    private val _selectedCardId = MutableStateFlow<Int?>(null)
-    val selectedCardId: StateFlow<Int?> = _selectedCardId.asStateFlow()
-
-    private val _sequenceCounts = MutableStateFlow<Map<TeamColor, Int>>(emptyMap())
-    val sequenceCounts: StateFlow<Map<TeamColor, Int>> = _sequenceCounts.asStateFlow()
-
+    private val random = Random.Default; private var deck = mutableListOf<PlayingCard>(); private var players: List<Player> = emptyList(); private var cpuJob: Job? = null
+    var currentPlayerIndex by mutableStateOf(0) private set
+    var currentGameState by mutableStateOf(GameState.SETUP) private set
+    var gameMessage by mutableStateOf("Choose game settings.") private set
+    var humanCount by mutableStateOf(1) private set
+    var numberOfTeams by mutableStateOf(2) private set
+    var winnerTeam by mutableStateOf<TeamColor?>(null) private set
+    var isDraw by mutableStateOf(false) private set
+    private val _board = MutableStateFlow<List<List<BoardSpace>>>(emptyList()); val board: StateFlow<List<List<BoardSpace>>> = _board.asStateFlow()
+    private val _selectedCardId = MutableStateFlow<Int?>(null); val selectedCardId: StateFlow<Int?> = _selectedCardId.asStateFlow()
+    private val _sequenceCounts = MutableStateFlow<Map<TeamColor, Int>>(emptyMap()); val sequenceCounts: StateFlow<Map<TeamColor, Int>> = _sequenceCounts.asStateFlow()
     val currentPlayer: Player get() = players.getOrElse(currentPlayerIndex) { Player(0, TeamColor.NONE, false) }
     private val requiredSequences: Int get() = if (numberOfTeams == 2) 2 else 1
 
@@ -863,6 +849,9 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         if (vm.lobbyError.isNotEmpty()) Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
 
         Spacer(Modifier.height(24.dp))
+        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
+        }
         if (isHost) { Button(onClick = { vm.hostStartGame() }) { Text(text = "START GAME NOW") } } 
         else { CircularProgressIndicator(); Text(text = "Waiting for host to start...", modifier = Modifier.padding(top = 12.dp)) }
 
@@ -881,6 +870,21 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     LaunchedEffect(room.status, room.matchStartTime) {
         if(room.status == "PLAYING" && room.matchStartTime > 0) {
             while(true) { matchSeconds = (System.currentTimeMillis() - room.matchStartTime) / 1000; delay(1000) }
+        }
+    }
+
+    val context = LocalContext.current
+    LaunchedEffect(isMyTurn) {
+        if (isMyTurn) {
+            try {
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 150, 100, 150), -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(longArrayOf(0, 150, 100, 150), -1)
+                }
+            } catch(e: Exception){}
         }
     }
 
@@ -908,7 +912,10 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                     val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
                     Text(text = rInfo, fontSize = 11.sp, color = Color.Gray)
                 }
-                val tStr = String.format("%02d:%02d", matchSeconds / 60, matchSeconds % 60)
+                val h = matchSeconds / 3600
+                val m = (matchSeconds % 3600) / 60
+                val s = matchSeconds % 60
+                val tStr = if (h > 0) String.format("%02d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
                 Text(text = tStr, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray, modifier = Modifier.padding(horizontal = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val sStr = "$teamSequences/$reqSequences"
@@ -998,8 +1005,22 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                         
                         Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         LazyColumn(Modifier.fillMaxWidth().weight(1f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                            item { Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { Text(text = "Player", Modifier.weight(1f), fontSize=12.sp); Text(text = "Secs", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "Wild", Modifier.weight(0.5f), fontSize=12.sp); Text(text = "Rem", Modifier.weight(0.5f), fontSize=12.sp) } }
-                            items(room.players) { p -> Row(Modifier.fillMaxWidth().padding(4.dp)) { Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0])); val secStr = "${p.timePlayedMs/1000}s"; Text(text = secStr, Modifier.weight(0.5f), fontSize=12.sp); val wStr = "${p.wildUsed}"; Text(text = wStr, Modifier.weight(0.5f), fontSize=12.sp); val rStr = "${p.removeUsed}"; Text(text = rStr, Modifier.weight(0.5f), fontSize=12.sp) } }
+                            item { Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { Text(text = "Player", Modifier.weight(1f), fontSize=12.sp); Text(text = "Time", Modifier.weight(0.6f), fontSize=12.sp); Text(text = "Wild", Modifier.weight(0.4f), fontSize=12.sp); Text(text = "Rem", Modifier.weight(0.4f), fontSize=12.sp) } }
+                            items(room.players) { p -> 
+                                Row(Modifier.fillMaxWidth().padding(4.dp)) { 
+                                    Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0]))
+                                    val tSecs = p.timePlayedMs / 1000
+                                    val hr = tSecs / 3600
+                                    val min = (tSecs % 3600) / 60
+                                    val sec = tSecs % 60
+                                    val timeStr = String.format("%02d:%02d:%02d", hr, min, sec)
+                                    Text(text = timeStr, Modifier.weight(0.6f), fontSize=12.sp) 
+                                    val wStr = "${p.wildUsed}"
+                                    Text(text = wStr, Modifier.weight(0.4f), fontSize=12.sp) 
+                                    val rStr = "${p.removeUsed}"
+                                    Text(text = rStr, Modifier.weight(0.4f), fontSize=12.sp) 
+                                } 
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -1017,7 +1038,11 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                             Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { Text(text = "Host: Start Next Match") }
                         }
-                        Spacer(Modifier.height(8.dp)); TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                            TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
+                            TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
+                        }
                     }
                 }
             }

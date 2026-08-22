@@ -98,7 +98,7 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit) {
 }
 
 // ==============================================================================
-// 2. OFFLINE CORE GAME (UNTOUCHED)
+// 2. OFFLINE CORE GAME (UNTOUCHED LOGIC)
 // ==============================================================================
 enum class Suit(val symbol: String, val color: Color) { SPADES("♠", Color.Black), HEARTS("♥", Color(0xFFC62828)), DIAMONDS("♦", Color(0xFFC62828)), CLUBS("♣", Color.Black), NONE("", Color.Transparent) }
 enum class Rank(val text: String) { A("A"), K("K"), Q("Q"), J("J"), TEN("10"), NINE("9"), EIGHT("8"), SEVEN("7"), SIX("6"), FIVE("5"), FOUR("4"), THREE("3"), TWO("2"), CORNER("★") }

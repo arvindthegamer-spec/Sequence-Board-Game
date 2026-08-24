@@ -76,7 +76,7 @@ object HistoryManager {
     fun saveMatch(context: Context, room: GameRoom) {
         val prefs = context.getSharedPreferences("SeqHistory", Context.MODE_PRIVATE)
         val history = prefs.getStringSet("matches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
-        val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+        
         val matchId = "${room.roomId}_${room.matchNumber}"
         
         val totalMatchSecs = if (room.matchStartTime > 0) (System.currentTimeMillis() - room.matchStartTime) / 1000 else 0
@@ -86,7 +86,9 @@ object HistoryManager {
         val timeStr = if (mHr > 0) String.format("%02d:%02d:%02d", mHr, mMin, mSec) else String.format("%02d:%02d", mMin, mSec)
         
         if (history.none { it.startsWith(matchId) }) {
-            history.add("$matchId|$date|${room.roomId}|${room.matchNumber}|${room.winnerTeam}|$timeStr")
+            val groupKey = "${room.sessionStartTimeStr} (Room: ${room.roomId})"
+            val record = "$matchId|$groupKey|${room.matchNumber}|${room.winnerTeam}|$timeStr"
+            history.add(record)
             prefs.edit().putStringSet("matches", history).apply()
         }
     }
@@ -134,6 +136,7 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit, onHistory:
     ) {
         Text(text = "SEQUENCE", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
         Text(text = "Board Game", fontSize = 20.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 48.dp))
+        
         Button(onClick = onPlayLocal, modifier = Modifier.fillMaxWidth(0.7f).height(60.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
             Text(text = "Play Local (Pass & Play / CPU)", fontSize = 16.sp) 
         }
@@ -145,6 +148,7 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit, onHistory:
         OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth(0.7f).height(50.dp)) { 
             Text(text = "View Match History", fontSize = 16.sp, color = Color.DarkGray) 
         }
+        
         Spacer(modifier = Modifier.height(64.dp))
         Text(text = "Developed by Aravind Valluri", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium)
     }
@@ -158,7 +162,9 @@ fun HistoryScreen(onExit: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Match History", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-            TextButton(onClick = onExit) { Text(text = "Back", color = Color.Red) }
+            TextButton(onClick = onExit) { 
+                Text(text = "Back", color = Color.Red) 
+            }
         }
         Spacer(Modifier.height(16.dp))
         
@@ -167,27 +173,35 @@ fun HistoryScreen(onExit: () -> Unit) {
                 Text(text = "No match history found.", color = Color.Gray)
             }
         } else {
-            // Group by Room ID to display nicely
-            val grouped = historyItems.map { it.split("|") }.groupBy { it.getOrNull(2) ?: "Unknown Room" }
+            val grouped = historyItems.map { it.split("|") }.groupBy { it.getOrNull(1) ?: "Unknown Session" }
             LazyColumn(Modifier.fillMaxSize()) {
-                grouped.forEach { (room, matches) ->
+                grouped.forEach { (sessionKey, matches) ->
                     item {
-                        Text(text = room, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).background(Color(0xFFE3F2FD)).fillMaxWidth().padding(4.dp))
+                        Text(
+                            text = sessionKey, 
+                            fontWeight = FontWeight.Bold, 
+                            fontSize = 15.sp, 
+                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).background(Color(0xFFE3F2FD)).fillMaxWidth().padding(8.dp)
+                        )
                     }
-                    items(matches) { matchData ->
-                        val date = matchData.getOrNull(1) ?: ""
-                        val mNum = matchData.getOrNull(3) ?: ""
-                        val winner = matchData.getOrNull(4) ?: ""
-                        val time = matchData.getOrNull(5) ?: ""
-                        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(text = "$mNum - $date", fontSize = 12.sp, color = Color.DarkGray)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(text = "Winner: $winner", fontWeight = FontWeight.Bold, color = Color(0xFF07852B))
-                                    Text(text = "Time: $time", fontSize = 14.sp)
-                                }
-                            }
+                    item {
+                        Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(8.dp)) {
+                            Text(text = "Match", Modifier.weight(0.3f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Winner", Modifier.weight(0.4f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Duration", Modifier.weight(0.3f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
+                    }
+                    items(matches.sortedBy { it.getOrNull(2)?.toIntOrNull() ?: 0 }) { matchData ->
+                        val mNum = matchData.getOrNull(2) ?: ""
+                        val winner = matchData.getOrNull(3) ?: ""
+                        val time = matchData.getOrNull(4) ?: ""
+                        
+                        Row(Modifier.fillMaxWidth().padding(8.dp)) {
+                            Text(text = mNum, Modifier.weight(0.3f), fontSize = 14.sp)
+                            Text(text = winner, Modifier.weight(0.4f), fontSize = 14.sp, color = Color(0xFF07852B), fontWeight = FontWeight.Bold)
+                            Text(text = time, Modifier.weight(0.3f), fontSize = 14.sp)
+                        }
+                        Divider(color = Color.LightGray, thickness = 0.5.dp)
                     }
                 }
             }
@@ -911,7 +925,7 @@ data class GameRoom(
     var presence: Map<String, Boolean> = emptyMap(), var rematchVotes: Map<String, Boolean> = emptyMap(),
     var teamColors: Map<String, Long> = emptyMap(), var matchNumber: Int = 1,
     var matchHistory: List<String> = emptyList(), var consecutiveWins: Int = 0, var lastWinningTeam: String = "",
-    var matchStartTime: Long = 0L
+    var matchStartTime: Long = 0L, var sessionStartTimeStr: String = ""
 )
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
@@ -943,11 +957,8 @@ class MultiplayerViewModel : ViewModel() {
             ref.setValue(true)
             ref.onDisconnect().setValue(false)
             
-            // If the original host syncs and they are still in the player list, give them host back!
             val currentRoom = _roomData.value
-            if (currentRoom.originalHostName == playerName && 
-                currentRoom.hostName != playerName && 
-                currentRoom.players.any { it.playerName == playerName }) {
+            if (currentRoom.originalHostName == playerName && currentRoom.hostName != playerName) {
                 db.child("rooms").child(roomCode).child("hostName").setValue(playerName)
             }
         }
@@ -981,12 +992,14 @@ class MultiplayerViewModel : ViewModel() {
         
         val hostPlayer = FBPlayer(playerId = 1, playerName = playerName, team = "Team1", hand = emptyList())
         val defaultColors = mapOf("Team1" to TEAM_COLORS[0], "Team2" to TEAM_COLORS[1], "Team3" to TEAM_COLORS[2])
+        val dateStr = java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
         
         val initialRoom = GameRoom(
             roomId = roomCode, password = password, status = "WAITING", 
             hostName = playerName, originalHostName = playerName,
             numberOfTeams = numTeams, turnPlayerId = 1, message = "Waiting for players...",
-            board = buildInitialBoard(), players = listOf(hostPlayer), deck = buildDeck(), teamColors = defaultColors
+            board = buildInitialBoard(), players = listOf(hostPlayer), deck = buildDeck(), 
+            teamColors = defaultColors, sessionStartTimeStr = dateStr
         )
         
         db.child("rooms").child(roomCode).setValue(initialRoom).addOnSuccessListener { 
@@ -1120,11 +1133,13 @@ class MultiplayerViewModel : ViewModel() {
         }
 
         val firstPlayerName = updatedPlayers.firstOrNull()?.playerName ?: "Player 1"
+        val firstPlayerId = updatedPlayers.firstOrNull()?.playerId ?: 1
+
         val updates = mapOf(
             "status" to "PLAYING", 
             "deck" to currentDeck, 
             "players" to updatedPlayers,
-            "turnPlayerId" to 1, 
+            "turnPlayerId" to firstPlayerId, 
             "message" to "Game started! $firstPlayerName's turn.",
             "matchStartTime" to System.currentTimeMillis()
         )
@@ -1150,17 +1165,28 @@ class MultiplayerViewModel : ViewModel() {
             return
         }
 
+        val teamList = if (room.numberOfTeams == 2) listOf("Team1", "Team2") else listOf("Team1", "Team2", "Team3")
+        val groupedByTeam = remainingPlayers.groupBy { it.team }
+        val reorderedPlayers = mutableListOf<FBPlayer>()
+        val maxPerTeam = groupedByTeam.values.maxOfOrNull { it.size } ?: 0
+        
+        for (i in 0 until maxPerTeam) { 
+            for (team in teamList) { 
+                groupedByTeam[team]?.getOrNull(i)?.let { reorderedPlayers.add(it) } 
+            } 
+        }
+
         val handSize = when { pCount <= 2 -> 7; pCount in 3..4 -> 6; pCount == 6 -> 5; pCount in 8..9 -> 4; else -> 3 }
         val newDeck = buildDeck().toMutableList()
-        val updatedPlayers = remainingPlayers.mapIndexed { index, player ->
+        val updatedPlayers = reorderedPlayers.mapIndexed { index, player ->
             val pHand = mutableListOf<FBCard>()
             repeat(handSize) { if (newDeck.isNotEmpty()) pHand.add(newDeck.removeAt(0)) }
             player.copy(playerId = index + 1, hand = pHand, timePlayedMs = 0L, wildUsed = 0, removeUsed = 0)
         }
         
         val nextTurnIndex = room.matchNumber % pCount
-        val firstTurnPlayerId = updatedPlayers[nextTurnIndex].playerId
-        val firstPlayerName = updatedPlayers[nextTurnIndex].playerName
+        val firstTurnPlayerId = updatedPlayers.getOrNull(nextTurnIndex)?.playerId ?: updatedPlayers.first().playerId
+        val firstPlayerName = updatedPlayers.getOrNull(nextTurnIndex)?.playerName ?: updatedPlayers.first().playerName
         
         val updates = mapOf(
             "status" to "PLAYING", 
@@ -1199,7 +1225,7 @@ class MultiplayerViewModel : ViewModel() {
                     val hostStillInGame = room.players.any { it.playerName == room.hostName }
                     if (!isHostOnline || !hostStillInGame) {
                         val newHost = room.players.firstOrNull { room.presence[it.playerName] == true }?.playerName
-                        if (newHost != null && newHost == playerName) {
+                        if (newHost != null && newHost == playerName && room.originalHostName != room.hostName) {
                             db.child("rooms").child(roomCode).child("hostName").setValue(newHost)
                         }
                     }
@@ -1347,20 +1373,12 @@ class MultiplayerViewModel : ViewModel() {
         }
 
         if (winningTeam != null) {
-            val totalMatchSecs = if (room.matchStartTime > 0) (System.currentTimeMillis() - room.matchStartTime) / 1000 else 0
-            val mHr = totalMatchSecs / 3600
-            val mMin = (totalMatchSecs % 3600) / 60
-            val mSec = totalMatchSecs % 60
-            val matchTimeStr = if (mHr > 0) String.format("%02d:%02d:%02d", mHr, mMin, mSec) else String.format("%02d:%02d", mMin, mSec)
-
             val isHatTrick = (room.lastWinningTeam == winningTeam && room.consecutiveWins + 1 >= 3)
             val consec = if (room.lastWinningTeam == winningTeam) room.consecutiveWins + 1 else 1
-            val newHist = room.matchHistory.toMutableList().apply { add("Match ${room.matchNumber}: $winningTeam Won ($matchTimeStr)") }
-            val htStr = if(isHatTrick) " HAT-TRICK!" else ""
             val winUpdates = mapOf(
                 "board" to updatedBoard, "players" to updatedPlayers, "status" to "FINISHED", 
-                "message" to "$actionMsg Team $winningTeam Wins!$htStr", "winnerTeam" to winningTeam, 
-                "lastMoveRow" to row, "lastMoveCol" to col, "matchHistory" to newHist, 
+                "message" to "$actionMsg Team $winningTeam Wins!", "winnerTeam" to winningTeam, 
+                "lastMoveRow" to row, "lastMoveCol" to col,
                 "consecutiveWins" to consec, "lastWinningTeam" to winningTeam
             )
             db.child("rooms").child(roomCode).updateChildren(winUpdates)
@@ -1424,7 +1442,7 @@ class MultiplayerViewModel : ViewModel() {
         }
         var shuffled = list.toList()
         val secureRnd = SecureRandom()
-        repeat(4) {
+        repeat(5) {
             shuffled = shuffled.shuffled(secureRnd)
         }
         return shuffled
@@ -1606,6 +1624,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     
     val context = LocalContext.current
     var matchSeconds by remember { mutableStateOf(0L) }
+    
     LaunchedEffect(room.status, room.matchStartTime) {
         if(room.status == "PLAYING" && room.matchStartTime > 0) {
             showScorecard = true
@@ -1853,7 +1872,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                                TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync", color = Color(0xFF1976D2)) }
+                                TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
                                 TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }
                                 TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
                             }

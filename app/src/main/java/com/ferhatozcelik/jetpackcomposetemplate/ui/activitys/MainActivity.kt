@@ -1089,7 +1089,7 @@ class MultiplayerViewModel : ViewModel() {
             val nextTeam = if (room.numberOfTeams == 2) { 
                 if (currentTeam == "Team1") "Team2" else "Team1" 
             } else { 
-                when (currentTeam) { "Team1" -> "Team2"; "Team2" -> "Team3"; else -> "Team1" } 
+                when (currentTeam) { "Team1" -> "Team2"; "Team3" -> "Team1"; else -> "Team3" } 
             }
             players[index] = players[index].copy(team = nextTeam)
             db.child("rooms").child(roomCode).child("players").setValue(players)
@@ -1140,10 +1140,18 @@ class MultiplayerViewModel : ViewModel() {
         }
 
         val handSize = when (pCount) { 2 -> 7; 3, 4 -> 6; 6 -> 5; 8, 9 -> 4; else -> 3 }
+        
+        val hands = Array(pCount) { mutableListOf<FBCard>() }
+        repeat(handSize) {
+            for (i in 0 until pCount) {
+                if (currentDeck.isNotEmpty()) {
+                    hands[i].add(currentDeck.removeAt(0))
+                }
+            }
+        }
+        
         val updatedPlayers = reorderedPlayers.mapIndexed { index, player ->
-            val pHand = mutableListOf<FBCard>()
-            repeat(handSize) { if (currentDeck.isNotEmpty()) pHand.add(currentDeck.removeAt(0)) }
-            player.copy(playerId = index + 1, hand = pHand)
+            player.copy(playerId = index + 1, hand = hands[index])
         }
 
         val firstPlayerName = updatedPlayers.firstOrNull()?.playerName ?: "Player 1"
@@ -1196,10 +1204,18 @@ class MultiplayerViewModel : ViewModel() {
         }
 
         val handSize = when { pCount <= 2 -> 7; pCount in 3..4 -> 6; pCount == 6 -> 5; pCount in 8..9 -> 4; else -> 3 }
+        
+        val hands = Array(pCount) { mutableListOf<FBCard>() }
+        repeat(handSize) {
+            for (i in 0 until pCount) {
+                if (newDeck.isNotEmpty()) {
+                    hands[i].add(newDeck.removeAt(0))
+                }
+            }
+        }
+        
         val updatedPlayers = reorderedPlayers.mapIndexed { index, player ->
-            val pHand = mutableListOf<FBCard>()
-            repeat(handSize) { if (newDeck.isNotEmpty()) pHand.add(newDeck.removeAt(0)) }
-            player.copy(playerId = index + 1, hand = pHand, timePlayedMs = 0L, wildUsed = 0, removeUsed = 0)
+            player.copy(playerId = index + 1, hand = hands[index], timePlayedMs = 0L, wildUsed = 0, removeUsed = 0)
         }
         
         val nextTurnIndex = room.matchNumber % pCount
@@ -1457,34 +1473,42 @@ class MultiplayerViewModel : ViewModel() {
     }
 
     private fun buildDeck(): List<FBCard> {
-        val list1 = mutableListOf<FBCard>()
-        var id = 0
-        for (s in listOf("♠", "♥", "♦", "♣")) {
-            for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) {
-                list1.add(FBCard(s, r, id++))
-            }
-        }
-        
-        val list2 = mutableListOf<FBCard>()
-        for (s in listOf("♠", "♥", "♦", "♣")) {
-            for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) {
-                list2.add(FBCard(s, r, id++))
-            }
-        }
-
         val secureRnd = SecureRandom()
-        var shuff1 = list1.toList()
-        var shuff2 = list2.toList()
-        repeat(2) {
-            shuff1 = shuff1.shuffled(secureRnd)
-            shuff2 = shuff2.shuffled(secureRnd)
+        val list = mutableListOf<FBCard>()
+        var id = 0
+        repeat(2) { 
+            for (s in listOf("♠", "♥", "♦", "♣")) { 
+                for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) { 
+                    list.add(FBCard(s, r, id++)) 
+                } 
+            } 
         }
         
-        var combined = shuff1 + shuff2
-        repeat(5) {
-            combined = combined.shuffled(secureRnd)
+        val rawShuffle = list.shuffled(secureRnd).toMutableList()
+        val finalDeck = mutableListOf<FBCard>()
+        
+        while(rawShuffle.isNotEmpty()) {
+            if (finalDeck.size < 2) {
+                finalDeck.add(rawShuffle.removeAt(0))
+            } else {
+                val lastCard = finalDeck.last()
+                val secondLastCard = finalDeck[finalDeck.size - 2]
+                
+                val validIndex = rawShuffle.indexOfFirst { c ->
+                    val causesSuitClump = c.suit == lastCard.suit && c.suit == secondLastCard.suit
+                    val isDuplicate = c.suit == lastCard.suit && c.rank == lastCard.rank
+                    !causesSuitClump && !isDuplicate
+                }
+                
+                if (validIndex != -1) {
+                    finalDeck.add(rawShuffle.removeAt(validIndex))
+                } else {
+                    finalDeck.add(rawShuffle.removeAt(0))
+                }
+            }
         }
-        return combined
+        
+        return finalDeck
     }
     
     private fun buildInitialBoard(): List<FBSpace> { 

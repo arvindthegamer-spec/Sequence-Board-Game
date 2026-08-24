@@ -938,7 +938,6 @@ class MultiplayerViewModel : ViewModel() {
     var roomPassword by mutableStateOf("")
     var lobbyError by mutableStateOf("")
 
-    var selectedTeams by mutableStateOf(2)
     private val _roomData = MutableStateFlow(GameRoom())
     val roomData: StateFlow<GameRoom> = _roomData.asStateFlow()
     private var roomListener: ValueEventListener? = null
@@ -995,9 +994,8 @@ class MultiplayerViewModel : ViewModel() {
         currentAppState = OnlineAppState.JOIN_ROOM
     }
 
-    fun executeCreateRoom(password: String, numTeams: Int) {
+    fun executeCreateRoom(password: String) {
         roomPassword = password
-        selectedTeams = numTeams
         currentAppState = OnlineAppState.WAITING_ROOM
         
         val hostPlayer = FBPlayer(playerId = 1, playerName = playerName, team = "Team1", hand = emptyList())
@@ -1007,7 +1005,7 @@ class MultiplayerViewModel : ViewModel() {
         val initialRoom = GameRoom(
             roomId = roomCode, password = password, status = "WAITING", 
             hostName = playerName, originalHostName = playerName,
-            numberOfTeams = numTeams, turnPlayerId = 1, message = "Waiting for players...",
+            numberOfTeams = 2, turnPlayerId = 1, message = "Waiting for players...",
             board = buildInitialBoard(), players = listOf(hostPlayer), deck = buildDeck(), 
             teamColors = defaultColors, sessionStartTimeStr = dateStr
         )
@@ -1078,6 +1076,24 @@ class MultiplayerViewModel : ViewModel() {
         db.child("rooms").child(roomCode).child("presence").child(pKick.playerName).removeValue()
     }
 
+    fun changeTotalTeams(newTeamCount: Int) {
+        val room = _roomData.value
+        if (room.hostName != playerName) return
+        if (room.numberOfTeams == newTeamCount) return
+        
+        val teamList = if (newTeamCount == 2) listOf("Team1", "Team2") else listOf("Team1", "Team2", "Team3")
+        val updatedPlayers = room.players.mapIndexed { index, player ->
+            val assignedTeam = teamList[index % newTeamCount]
+            player.copy(team = assignedTeam)
+        }
+        
+        val updates = mapOf(
+            "numberOfTeams" to newTeamCount,
+            "players" to updatedPlayers
+        )
+        db.child("rooms").child(roomCode).updateChildren(updates)
+    }
+
     fun changePlayerTeam(playerId: Int) {
         val room = _roomData.value
         if (room.hostName != playerName) return
@@ -1089,7 +1105,7 @@ class MultiplayerViewModel : ViewModel() {
             val nextTeam = if (room.numberOfTeams == 2) { 
                 if (currentTeam == "Team1") "Team2" else "Team1" 
             } else { 
-                when (currentTeam) { "Team1" -> "Team2"; "Team3" -> "Team1"; else -> "Team3" } 
+                when (currentTeam) { "Team1" -> "Team2"; "Team2" -> "Team3"; else -> "Team1" } 
             }
             players[index] = players[index].copy(team = nextTeam)
             db.child("rooms").child(roomCode).child("players").setValue(players)
@@ -1120,9 +1136,10 @@ class MultiplayerViewModel : ViewModel() {
         val room = _roomData.value
         val pCount = room.players.size
         
-        if (pCount !in listOf(2, 3, 4, 6, 8, 9, 10, 12)) { lobbyError = "Invalid player count."; return }
-        if (pCount % room.numberOfTeams != 0) { lobbyError = "Teams must be even."; return }
+        if (pCount !in listOf(2, 3, 4, 6, 8, 9, 10, 12)) { lobbyError = "Cannot start: Invalid player count."; return }
+        if (pCount % room.numberOfTeams != 0) { lobbyError = "Cannot start: Uneven teams ($pCount players / ${room.numberOfTeams} teams)."; return }
 
+        lobbyError = ""
         val teamList = if (room.numberOfTeams == 2) listOf("Team1", "Team2") else listOf("Team1", "Team2", "Team3")
         val groupedByTeam = room.players.groupBy { it.team }
         val reorderedPlayers = mutableListOf<FBPlayer>()
@@ -1473,42 +1490,37 @@ class MultiplayerViewModel : ViewModel() {
     }
 
     private fun buildDeck(): List<FBCard> {
-        val secureRnd = SecureRandom()
-        val list = mutableListOf<FBCard>()
+        val list1 = mutableListOf<FBCard>()
         var id = 0
-        repeat(2) { 
-            for (s in listOf("♠", "♥", "♦", "♣")) { 
-                for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) { 
-                    list.add(FBCard(s, r, id++)) 
-                } 
-            } 
-        }
-        
-        val rawShuffle = list.shuffled(secureRnd).toMutableList()
-        val finalDeck = mutableListOf<FBCard>()
-        
-        while(rawShuffle.isNotEmpty()) {
-            if (finalDeck.size < 2) {
-                finalDeck.add(rawShuffle.removeAt(0))
-            } else {
-                val lastCard = finalDeck.last()
-                val secondLastCard = finalDeck[finalDeck.size - 2]
-                
-                val validIndex = rawShuffle.indexOfFirst { c ->
-                    val causesSuitClump = c.suit == lastCard.suit && c.suit == secondLastCard.suit
-                    val isDuplicate = c.suit == lastCard.suit && c.rank == lastCard.rank
-                    !causesSuitClump && !isDuplicate
-                }
-                
-                if (validIndex != -1) {
-                    finalDeck.add(rawShuffle.removeAt(validIndex))
-                } else {
-                    finalDeck.add(rawShuffle.removeAt(0))
-                }
+        for (s in listOf("♠", "♥", "♦", "♣")) {
+            for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) {
+                list1.add(FBCard(s, r, id++))
             }
         }
         
-        return finalDeck
+        val list2 = mutableListOf<FBCard>()
+        for (s in listOf("♠", "♥", "♦", "♣")) {
+            for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) {
+                list2.add(FBCard(s, r, id++))
+            }
+        }
+
+        val secureRnd = SecureRandom()
+        var shuff1 = list1.toList()
+        var shuff2 = list2.toList()
+        
+        repeat(2) {
+            shuff1 = shuff1.shuffled(secureRnd)
+            shuff2 = shuff2.shuffled(secureRnd)
+        }
+        
+        var combined = shuff1 + shuff2
+        
+        repeat(5) {
+            combined = combined.shuffled(secureRnd)
+        }
+        
+        return combined
     }
     
     private fun buildInitialBoard(): List<FBSpace> { 
@@ -1575,22 +1587,12 @@ fun OnlineEnterNameScreen(vm: MultiplayerViewModel) {
 @Composable
 fun OnlineCreateScreen(vm: MultiplayerViewModel) {
     var password by remember { mutableStateOf("") }
-    var teams by remember { mutableStateOf(2) }
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         val rc = vm.roomCode
         Text(text = "Room Code: $rc", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
         OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Optional Password") }, modifier = Modifier.padding(vertical = 8.dp))
-        val tCountStr = "$teams"
-        Text(text = "Teams: $tCountStr", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { 
-            listOf(2, 3).forEach { tCount -> 
-                Button(onClick = { teams = tCount }, colors = ButtonDefaults.buttonColors(containerColor = if (teams == tCount) Color.Blue else Color.Gray)) { 
-                    Text(text = tCount.toString()) 
-                } 
-            } 
-        }
         Spacer(Modifier.height(32.dp))
-        Button(onClick = { vm.executeCreateRoom(password, teams) }) { Text(text = "Open Lobby") }
+        Button(onClick = { vm.executeCreateRoom(password) }) { Text(text = "Open Lobby") }
         TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text(text = "Cancel") }
         if (vm.lobbyError.isNotEmpty()) {
             Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
@@ -1653,6 +1655,25 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                     Button(onClick = { vm.kickPlayer(p.playerId) }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.height(30.dp), contentPadding = PaddingValues(4.dp)) { Text(text = "X", fontSize = 10.sp) }
                 }
             }
+        }
+        
+        if (isHost) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.padding(top = 16.dp)) {
+                Text(text = "Number of Teams:", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(Modifier.width(8.dp))
+                listOf(2, 3).forEach { tCount -> 
+                    Button(
+                        onClick = { vm.changeTotalTeams(tCount) }, 
+                        colors = ButtonDefaults.buttonColors(containerColor = if (room.numberOfTeams == tCount) Color(0xFF1976D2) else Color.Gray),
+                        modifier = Modifier.padding(horizontal = 4.dp).height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) { 
+                        Text(text = tCount.toString()) 
+                    } 
+                }
+            }
+        } else {
+            Text(text = "Teams: ${room.numberOfTeams}", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(top = 16.dp))
         }
 
         if (vm.lobbyError.isNotEmpty()) {

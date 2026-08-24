@@ -964,6 +964,16 @@ class MultiplayerViewModel : ViewModel() {
         }
     }
 
+    fun hostManualShuffle() {
+        val room = _roomData.value
+        if (room.hostName != playerName) return
+        val newDeck = buildDeck()
+        db.child("rooms").child(roomCode).updateChildren(mapOf(
+            "deck" to newDeck,
+            "message" to "Host shuffled the deck manually!"
+        ))
+    }
+
     fun proceedToCreate(name: String, context: Context) {
         val safeName = name.trim().replace(Regex("[.#$\\[\\]]"), "")
         if (safeName.isBlank()) { lobbyError = "Enter a valid name"; return }
@@ -1124,7 +1134,11 @@ class MultiplayerViewModel : ViewModel() {
             } 
         }
 
-        val currentDeck = room.deck.toMutableList()
+        var currentDeck = room.deck.toMutableList()
+        if (currentDeck.size < 104) {
+            currentDeck = buildDeck().toMutableList()
+        }
+
         val handSize = when (pCount) { 2 -> 7; 3, 4 -> 6; 6 -> 5; 8, 9 -> 4; else -> 3 }
         val updatedPlayers = reorderedPlayers.mapIndexed { index, player ->
             val pHand = mutableListOf<FBCard>()
@@ -1176,8 +1190,12 @@ class MultiplayerViewModel : ViewModel() {
             } 
         }
 
+        var newDeck = room.deck.toMutableList()
+        if (newDeck.size < 104) {
+            newDeck = buildDeck().toMutableList()
+        }
+
         val handSize = when { pCount <= 2 -> 7; pCount in 3..4 -> 6; pCount == 6 -> 5; pCount in 8..9 -> 4; else -> 3 }
-        val newDeck = buildDeck().toMutableList()
         val updatedPlayers = reorderedPlayers.mapIndexed { index, player ->
             val pHand = mutableListOf<FBCard>()
             repeat(handSize) { if (newDeck.isNotEmpty()) pHand.add(newDeck.removeAt(0)) }
@@ -1373,12 +1391,20 @@ class MultiplayerViewModel : ViewModel() {
         }
 
         if (winningTeam != null) {
+            val totalMatchSecs = if (room.matchStartTime > 0) (System.currentTimeMillis() - room.matchStartTime) / 1000 else 0
+            val mHr = totalMatchSecs / 3600
+            val mMin = (totalMatchSecs % 3600) / 60
+            val mSec = totalMatchSecs % 60
+            val matchTimeStr = if (mHr > 0) String.format("%02d:%02d:%02d", mHr, mMin, mSec) else String.format("%02d:%02d", mMin, mSec)
+
             val isHatTrick = (room.lastWinningTeam == winningTeam && room.consecutiveWins + 1 >= 3)
             val consec = if (room.lastWinningTeam == winningTeam) room.consecutiveWins + 1 else 1
+            val newHist = room.matchHistory.toMutableList().apply { add("Match ${room.matchNumber}: $winningTeam Won ($matchTimeStr)") }
+            val htStr = if(isHatTrick) " HAT-TRICK!" else ""
             val winUpdates = mapOf(
                 "board" to updatedBoard, "players" to updatedPlayers, "status" to "FINISHED", 
-                "message" to "$actionMsg Team $winningTeam Wins!", "winnerTeam" to winningTeam, 
-                "lastMoveRow" to row, "lastMoveCol" to col,
+                "message" to "$actionMsg Team $winningTeam Wins!$htStr", "winnerTeam" to winningTeam, 
+                "lastMoveRow" to row, "lastMoveCol" to col, "matchHistory" to newHist, 
                 "consecutiveWins" to consec, "lastWinningTeam" to winningTeam
             )
             db.child("rooms").child(roomCode).updateChildren(winUpdates)
@@ -1431,21 +1457,34 @@ class MultiplayerViewModel : ViewModel() {
     }
 
     private fun buildDeck(): List<FBCard> {
-        val list = mutableListOf<FBCard>()
+        val list1 = mutableListOf<FBCard>()
         var id = 0
-        repeat(2) { 
-            for (s in listOf("♠", "♥", "♦", "♣")) { 
-                for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) { 
-                    list.add(FBCard(s, r, id++)) 
-                } 
-            } 
+        for (s in listOf("♠", "♥", "♦", "♣")) {
+            for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) {
+                list1.add(FBCard(s, r, id++))
+            }
         }
-        var shuffled = list.toList()
+        
+        val list2 = mutableListOf<FBCard>()
+        for (s in listOf("♠", "♥", "♦", "♣")) {
+            for (r in listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")) {
+                list2.add(FBCard(s, r, id++))
+            }
+        }
+
         val secureRnd = SecureRandom()
-        repeat(5) {
-            shuffled = shuffled.shuffled(secureRnd)
+        var shuff1 = list1.toList()
+        var shuff2 = list2.toList()
+        repeat(2) {
+            shuff1 = shuff1.shuffled(secureRnd)
+            shuff2 = shuff2.shuffled(secureRnd)
         }
-        return shuffled
+        
+        var combined = shuff1 + shuff2
+        repeat(5) {
+            combined = combined.shuffled(secureRnd)
+        }
+        return combined
     }
     
     private fun buildInitialBoard(): List<FBSpace> { 
@@ -1601,7 +1640,12 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
         }
         if (isHost) { 
-            Button(onClick = { vm.hostStartGame() }) { Text(text = "START GAME NOW") } 
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { vm.hostManualShuffle() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))) { 
+                    Text(text = "Shuffle Deck") 
+                }
+                Button(onClick = { vm.hostStartGame() }) { Text(text = "START GAME") } 
+            }
         } 
         else { 
             CircularProgressIndicator()
@@ -1866,8 +1910,13 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             
                             if(vm.playerName == room.hostName) {
                                 Spacer(Modifier.height(8.dp))
-                                Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
-                                    Text(text = "Host: Start Next Match") 
+                                Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                    Button(onClick = { vm.hostManualShuffle() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))) { 
+                                        Text(text = "Shuffle Deck") 
+                                    }
+                                    Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
+                                        Text(text = "Host: Start Next Match") 
+                                    }
                                 }
                             }
                             Spacer(Modifier.height(8.dp))

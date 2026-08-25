@@ -1199,6 +1199,11 @@ class MultiplayerViewModel : ViewModel() {
         if (remainingPlayers.isEmpty()) return
         
         val pCount = remainingPlayers.size
+        
+        if (pCount !in listOf(2, 3, 4, 6, 8, 9, 10, 12)) {
+            db.child("rooms").child(roomCode).child("message").setValue("Cannot start: Invalid player count.")
+            return
+        }
         if (pCount % room.numberOfTeams != 0) {
             db.child("rooms").child(roomCode).child("message").setValue("Cannot start: Uneven teams. Waiting for players...")
             return
@@ -1888,7 +1893,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             Spacer(Modifier.height(16.dp))
                             
                             Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            LazyColumn(Modifier.fillMaxWidth().weight(1f).border(1.dp, Color.LightGray).padding(4.dp)) {
+                            LazyColumn(Modifier.fillMaxWidth().weight(0.8f).border(1.dp, Color.LightGray).padding(4.dp)) {
                                 item { 
                                     Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { 
                                         Text(text = "Player", Modifier.weight(1f), fontSize=12.sp)
@@ -1915,11 +1920,53 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             }
                             Spacer(Modifier.height(8.dp))
                             Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            LazyColumn(Modifier.fillMaxWidth().weight(0.5f).border(1.dp, Color.LightGray).padding(4.dp)) {
+                            LazyColumn(Modifier.fillMaxWidth().weight(0.4f).border(1.dp, Color.LightGray).padding(4.dp)) {
                                 items(room.matchHistory) { h -> Text(text = h, fontSize = 12.sp, modifier = Modifier.padding(2.dp)) }
                             }
 
-                            Spacer(Modifier.height(16.dp))
+                            if (vm.playerName == room.hostName) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(text = "Host: Manage Next Match", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                                    Text(text = "Teams:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Spacer(Modifier.width(8.dp))
+                                    listOf(2, 3).forEach { tCount -> 
+                                        Button(
+                                            onClick = { vm.changeTotalTeams(tCount) }, 
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (room.numberOfTeams == tCount) Color(0xFF1976D2) else Color.Gray),
+                                            modifier = Modifier.padding(horizontal = 4.dp).height(28.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                        ) { 
+                                            Text(text = tCount.toString(), fontSize = 11.sp) 
+                                        } 
+                                    }
+                                }
+                                LazyColumn(Modifier.fillMaxWidth().weight(0.6f).border(1.dp, Color.LightGray).padding(4.dp)) {
+                                    items(room.players) { p ->
+                                        val isOnline = room.presence[p.playerName] == true
+                                        val teamCol = Color(room.teamColors[p.team] ?: TEAM_COLORS[0])
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                                            Box(Modifier.size(12.dp).clip(CircleShape).background(teamCol).border(1.dp, Color.Black, CircleShape).clickable { vm.cycleTeamColor(p.team) })
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(text = p.playerName, fontSize = 11.sp, color = if (isOnline) teamCol else Color.Gray, modifier = Modifier.weight(1f))
+                                            if (!isOnline) {
+                                                Text(text = "(Offline)", fontSize = 9.sp, color = Color.Red, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 4.dp))
+                                            }
+                                            if (p.playerName != vm.playerName) {
+                                                Button(onClick = { vm.changePlayerTeam(p.playerId) }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { 
+                                                    Text(text = "Team", fontSize = 9.sp) 
+                                                }
+                                                Spacer(Modifier.width(4.dp))
+                                                Button(onClick = { vm.kickPlayer(p.playerId) }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.height(24.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { 
+                                                    Text(text = "X", fontSize = 9.sp) 
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
                             
                             val pendingPlayers = room.players.filter { room.rematchVotes[it.playerName] != true }
                             Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {

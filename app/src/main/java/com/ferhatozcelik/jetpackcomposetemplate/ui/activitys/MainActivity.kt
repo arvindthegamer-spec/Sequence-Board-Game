@@ -773,26 +773,28 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
 
 @Composable
 private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
-    val bg = when { 
-        space.card.rank == Rank.CORNER -> Color(0xFFFFD75E)
-        space.isHighlighted -> Color(0xFF9EE6AC)
-        space.isCompletedSequence -> space.occupant.uiColor.copy(alpha = 0.18f)
-        else -> Color.White 
+    val bgBrush = when { 
+        space.card.rank == Rank.CORNER -> Brush.linearGradient(listOf(Color(0xFFFFE082), Color(0xFFFFCA28)))
+        space.isHighlighted -> Brush.linearGradient(listOf(Color(0xFFA5D6A7), Color(0xFF81C784)))
+        space.isCompletedSequence -> Brush.linearGradient(listOf(space.occupant.uiColor.copy(alpha = 0.15f), space.occupant.uiColor.copy(alpha = 0.25f)))
+        else -> Brush.linearGradient(listOf(Color.White, Color(0xFFF3F3F3)))
     }
+    
     val borderC = when { 
         space.isHighlighted -> Color(0xFF07852B)
         space.isCompletedSequence -> space.occupant.uiColor
-        else -> Color(0xFF777777) 
+        else -> Color(0xFFDDDDDD) 
     }
     
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.68f)
-            .background(bg, MaterialTheme.shapes.extraSmall)
-            .border(if (space.isHighlighted || space.isCompletedSequence) 2.dp else 0.6.dp, borderC, MaterialTheme.shapes.extraSmall)
-            .clickable(enabled = space.isHighlighted, onClick = onClick)
             .padding(1.dp)
+            .shadow(2.dp, MaterialTheme.shapes.extraSmall)
+            .background(bgBrush, MaterialTheme.shapes.extraSmall)
+            .border(if (space.isHighlighted || space.isCompletedSequence) 2.dp else 0.5.dp, borderC, MaterialTheme.shapes.extraSmall)
+            .clickable(enabled = space.isHighlighted, onClick = onClick)
     ) {
         if (space.card.rank == Rank.CORNER) { 
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) { 
@@ -808,14 +810,21 @@ private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
         }
         
         if (space.occupant != TeamColor.NONE) { 
+            val chipAlpha = if (space.isCompletedSequence) 0.62f else 0.9f
+            val chipBaseColor = space.occupant.uiColor
+            val cColor1 = chipBaseColor.copy(alpha = chipAlpha)
+            val cColor2 = chipBaseColor.copy(alpha = (chipAlpha - 0.2f).coerceAtLeast(0.1f))
+            val chipBrush = Brush.radialGradient(listOf(cColor2, cColor1))
+            
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 2.dp)
                     .fillMaxWidth(0.68f)
                     .aspectRatio(1f)
+                    .shadow(2.dp, CircleShape)
                     .clip(CircleShape)
-                    .background(space.occupant.uiColor.copy(alpha = if (space.isCompletedSequence) 0.62f else 0.9f))
+                    .background(chipBrush)
                     .border(
                         if (space.isCompletedSequence) 2.dp else 1.dp, 
                         if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), 
@@ -840,12 +849,12 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
         Row(Modifier.fillMaxWidth().height(76.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             player.hand.forEach { card ->
                 val selected = card.uniqueId == selectedCardId
-                Card(
+                Box(
                     modifier = Modifier.weight(1f).fillMaxHeight()
+                        .shadow(if (selected) 6.dp else 2.dp, MaterialTheme.shapes.small)
+                        .background(Brush.linearGradient(listOf(Color.White, Color(0xFFF7F7F7))), MaterialTheme.shapes.small)
                         .border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small)
-                        .clickable { onSelect(card.uniqueId) }, 
-                    colors = CardDefaults.cardColors(containerColor = Color.White), 
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        .clickable { onSelect(card.uniqueId) }
                 ) {
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Text(text = card.rank.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = card.suit.color)
@@ -1739,6 +1748,7 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val room by vm.roomData.collectAsState()

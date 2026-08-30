@@ -8,6 +8,8 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +27,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -291,7 +295,9 @@ class GameViewModel : ViewModel() {
         currentPlayerIndex = 0
         _selectedCardId.value = null
         
-        deck = buildTwoDecks().shuffled(random).toMutableList()
+        deck = buildTwoDecks().toMutableList()
+        repeat(10) { deck = deck.shuffled(random).toMutableList() }
+        
         var idCounter = 10000
         _board.value = List(10) { row -> 
             List(10) { col -> 
@@ -925,7 +931,8 @@ data class GameRoom(
     var presence: Map<String, Boolean> = emptyMap(), var rematchVotes: Map<String, Boolean> = emptyMap(),
     var teamColors: Map<String, Long> = emptyMap(), var matchNumber: Int = 1,
     var matchHistory: List<String> = emptyList(), var consecutiveWins: Int = 0, var lastWinningTeam: String = "",
-    var matchStartTime: Long = 0L, var sessionStartTimeStr: String = ""
+    var matchStartTime: Long = 0L, var sessionStartTimeStr: String = "",
+    var lastPlayedCard: FBCard? = null
 )
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
@@ -1007,7 +1014,7 @@ class MultiplayerViewModel : ViewModel() {
             hostName = playerName, originalHostName = playerName,
             numberOfTeams = 2, turnPlayerId = 1, message = "Waiting for players...",
             board = buildInitialBoard(), players = listOf(hostPlayer), deck = buildDeck(), 
-            teamColors = defaultColors, sessionStartTimeStr = dateStr
+            teamColors = defaultColors, sessionStartTimeStr = dateStr, lastPlayedCard = null
         )
         
         db.child("rooms").child(roomCode).setValue(initialRoom).addOnSuccessListener { 
@@ -1180,7 +1187,8 @@ class MultiplayerViewModel : ViewModel() {
             "players" to updatedPlayers,
             "turnPlayerId" to firstPlayerId, 
             "message" to "Game started! $firstPlayerName's turn.",
-            "matchStartTime" to System.currentTimeMillis()
+            "matchStartTime" to System.currentTimeMillis(),
+            "lastPlayedCard" to null
         )
         db.child("rooms").child(roomCode).updateChildren(updates)
     }
@@ -1255,7 +1263,8 @@ class MultiplayerViewModel : ViewModel() {
             "rematchVotes" to emptyMap<String, Boolean>(),
             "lastMoveRow" to -1, 
             "lastMoveCol" to -1, 
-            "matchNumber" to room.matchNumber + 1
+            "matchNumber" to room.matchNumber + 1,
+            "lastPlayedCard" to null
         )
         db.child("rooms").child(roomCode).updateChildren(updates)
     }
@@ -1268,7 +1277,6 @@ class MultiplayerViewModel : ViewModel() {
                 if (room != null) {
                     val wasMyTurn = (_roomData.value.turnPlayerId == myPlayerId)
                     val isMyTurnNow = (room.turnPlayerId == myPlayerId && room.status == "PLAYING")
-                    _roomData.value = room
                     
                     if (room.status == "PLAYING" && currentAppState == OnlineAppState.WAITING_ROOM) {
                         currentAppState = OnlineAppState.PLAYING
@@ -1285,6 +1293,8 @@ class MultiplayerViewModel : ViewModel() {
                             db.child("rooms").child(roomCode).child("hostName").setValue(newHost)
                         }
                     }
+
+                    _roomData.value = room
                 }
             }
             override fun onCancelled(error: DatabaseError) { lobbyError = "Lost connection." }
@@ -1439,18 +1449,34 @@ class MultiplayerViewModel : ViewModel() {
             val consec = if (room.lastWinningTeam == winningTeam) room.consecutiveWins + 1 else 1
             val newHist = room.matchHistory.toMutableList().apply { add("Match ${room.matchNumber}: $winningTeam Won ($matchTimeStr)") }
             val htStr = if(isHatTrick) " HAT-TRICK!" else ""
+            
+            // Optimistic instant UI update
+            _roomData.value = room.copy(
+                board = updatedBoard, players = updatedPlayers, status = "FINISHED", 
+                message = "$actionMsg Team $winningTeam Wins!$htStr", winnerTeam = winningTeam, 
+                lastMoveRow = row, lastMoveCol = col, matchHistory = newHist, 
+                consecutiveWins = consec, lastWinningTeam = winningTeam, lastPlayedCard = card
+            )
+
             val winUpdates = mapOf(
                 "board" to updatedBoard, "players" to updatedPlayers, "status" to "FINISHED", 
                 "message" to "$actionMsg Team $winningTeam Wins!$htStr", "winnerTeam" to winningTeam, 
                 "lastMoveRow" to row, "lastMoveCol" to col, "matchHistory" to newHist, 
-                "consecutiveWins" to consec, "lastWinningTeam" to winningTeam
+                "consecutiveWins" to consec, "lastWinningTeam" to winningTeam, "lastPlayedCard" to card
             )
             db.child("rooms").child(roomCode).updateChildren(winUpdates)
         } else {
+            // Optimistic instant UI update
+            _roomData.value = room.copy(
+                board = updatedBoard, deck = deckList, players = updatedPlayers, 
+                turnPlayerId = nextTurnId, message = "$actionMsg $nextPlayerName's turn.", 
+                lastMoveRow = row, lastMoveCol = col, lastPlayedCard = card
+            )
+
             val updates = mapOf(
                 "board" to updatedBoard, "deck" to deckList, "players" to updatedPlayers, 
                 "turnPlayerId" to nextTurnId, "message" to "$actionMsg $nextPlayerName's turn.", 
-                "lastMoveRow" to row, "lastMoveCol" to col
+                "lastMoveRow" to row, "lastMoveCol" to col, "lastPlayedCard" to card
             )
             db.child("rooms").child(roomCode).updateChildren(updates)
         }
@@ -1489,8 +1515,13 @@ class MultiplayerViewModel : ViewModel() {
         }
         val prefix = if (isCpu) "CPU (${actingPlayer.playerName}) " else "${actingPlayer.playerName} "
 
+        // Optimistic UI update
+        _roomData.value = room.copy(
+            deck = deckList, players = updatedPlayers, message = "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", lastPlayedCard = card
+        )
+
         db.child("rooms").child(roomCode).updateChildren(
-            mapOf("deck" to deckList, "players" to updatedPlayers, "message" to "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.")
+            mapOf("deck" to deckList, "players" to updatedPlayers, "message" to "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", "lastPlayedCard" to card)
         )
     }
 
@@ -1521,7 +1552,7 @@ class MultiplayerViewModel : ViewModel() {
         
         var combined = shuff1 + shuff2
         
-        repeat(5) {
+        repeat(10) {
             combined = combined.shuffled(secureRnd)
         }
         
@@ -1716,6 +1747,10 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     var selectedCard by remember { mutableStateOf<FBCard?>(null) }
     var showScorecard by remember { mutableStateOf(true) }
     
+    // Central Play Animation State
+    var centralCardToDisplay by remember { mutableStateOf<FBCard?>(null) }
+    var animationTrigger by remember(room.lastPlayedCard) { mutableStateOf(room.lastPlayedCard) }
+    
     val context = LocalContext.current
     var matchSeconds by remember { mutableStateOf(0L) }
     
@@ -1728,6 +1763,15 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             if (room.winnerTeam.isNotEmpty() && room.players.isNotEmpty()) {
                 HistoryManager.saveMatch(context, room)
             }
+        }
+    }
+
+    // Trigger the central animation when lastPlayedCard changes
+    LaunchedEffect(animationTrigger) {
+        if (animationTrigger != null) {
+            centralCardToDisplay = animationTrigger
+            delay(1000)
+            centralCardToDisplay = null
         }
     }
 
@@ -1803,23 +1847,39 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                         }
                         val isLastMove = space.r == room.lastMoveRow && space.c == room.lastMoveCol
                         
-                        val bg = when { 
-                            space.card.rank == "★" -> Color(0xFFFFD75E)
-                            isLegalMove -> Color(0xFF9EE6AC)
-                            isLastMove -> Color(0xFFFFF9C4) 
-                            space.isCompletedSequence -> Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha = 0.18f)
-                            else -> Color.White 
+                        val bgBrush = when { 
+                            space.card.rank == "★" -> Brush.linearGradient(listOf(Color(0xFFFFE082), Color(0xFFFFCA28)))
+                            isLegalMove -> Brush.linearGradient(listOf(Color(0xFFA5D6A7), Color(0xFF81C784)))
+                            isLastMove -> Brush.linearGradient(listOf(Color(0xFFFFF59D), Color(0xFFFFF176)))
+                            space.isCompletedSequence -> Brush.linearGradient(listOf(Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha=0.15f), Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha=0.3f)))
+                            else -> Brush.linearGradient(listOf(Color.White, Color(0xFFF3F3F3)))
                         }
 
-                        Box(modifier = Modifier.aspectRatio(0.74f).padding(1.dp).background(bg).border(if (isLegalMove || space.isCompletedSequence || isLastMove) 2.dp else 1.dp, when { isLegalMove -> Color(0xFF07852B); isLastMove -> Color(0xFFFF9800); else -> Color.LightGray }).clickable(enabled = isLegalMove && isMyTurn) { vm.playCard(selectedCard!!, space.r, space.c); selectedCard = null }) {
+                        Box(modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(0.74f)
+                            .padding(1.dp)
+                            .shadow(2.dp, MaterialTheme.shapes.extraSmall)
+                            .background(bgBrush, MaterialTheme.shapes.extraSmall)
+                            .border(if (isLegalMove || space.isCompletedSequence || isLastMove) 2.dp else 0.5.dp, when { isLegalMove -> Color(0xFF07852B); isLastMove -> Color(0xFFFF9800); else -> Color.LightGray }, MaterialTheme.shapes.extraSmall)
+                            .clickable(enabled = isLegalMove && isMyTurn) { vm.playCard(selectedCard!!, space.r, space.c); selectedCard = null }) {
+                            
                             Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = space.card.rank, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
                                 Text(text = space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
                             }
                             if (space.occupant != "NONE") {
                                 val chipAlpha = if (space.isCompletedSequence) 0.62f else 0.9f
-                                val cColor = Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha = chipAlpha)
-                                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f).clip(CircleShape).background(cColor).border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) {
+                                val chipBaseColor = Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0])
+                                val cColor1 = chipBaseColor.copy(alpha = chipAlpha)
+                                val cColor2 = chipBaseColor.copy(alpha = (chipAlpha - 0.2f).coerceAtLeast(0.1f))
+                                val chipBrush = Brush.radialGradient(listOf(cColor2, cColor1))
+                                
+                                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f)
+                                    .shadow(2.dp, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(chipBrush)
+                                    .border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) {
                                     if (space.isCompletedSequence) Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
@@ -1858,17 +1918,43 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
             }
 
+            // Staggered Dealing Animation Engine
+            val visibleCardIds = remember { mutableStateListOf<Int>() }
+            LaunchedEffect(myPlayer?.hand) {
+                val hand = myPlayer?.hand ?: emptyList()
+                visibleCardIds.retainAll(hand.map { it.id }.toSet())
+                hand.forEach { c ->
+                    if (!visibleCardIds.contains(c.id)) {
+                        delay(150)
+                        visibleCardIds.add(c.id)
+                    }
+                }
+            }
+
             Column {
                 Row(Modifier.fillMaxWidth().height(80.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     (myPlayer?.hand ?: emptyList()).forEach { card ->
-                        val selected = card == selectedCard
-                        Card(modifier = Modifier.weight(1f).padding(2.dp).fillMaxHeight().border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small).clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text(text = card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
-                                Text(text = card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
-                                when { 
-                                    card.isTwoEyedJack -> Text(text = "WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
-                                    card.isOneEyedJack -> Text(text = "REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold) 
+                        AnimatedVisibility(
+                            visible = visibleCardIds.contains(card.id),
+                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                            modifier = Modifier.weight(1f).padding(2.dp)
+                        ) {
+                            val selected = card == selectedCard
+                            Box(
+                                modifier = Modifier.fillMaxHeight()
+                                    .shadow(if (selected) 6.dp else 2.dp, MaterialTheme.shapes.small)
+                                    .background(Brush.linearGradient(listOf(Color.White, Color(0xFFF7F7F7))), MaterialTheme.shapes.small)
+                                    .border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small)
+                                    .clickable(enabled = isMyTurn) { selectedCard = if (selectedCard == card) null else card }
+                            ) {
+                                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                    Text(text = card.rank, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
+                                    Text(text = card.suit, fontSize = 14.sp, color = if (card.suit == "♥" || card.suit == "♦") Color.Red else Color.Black)
+                                    when { 
+                                        card.isTwoEyedJack -> Text(text = "WILD", fontSize = 7.sp, color = Color.Blue, fontWeight = FontWeight.Bold)
+                                        card.isOneEyedJack -> Text(text = "REMOVE", fontSize = 7.sp, color = Color.Red, fontWeight = FontWeight.Bold) 
+                                    }
                                 }
                             }
                         }
@@ -1876,6 +1962,27 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
                 OutlinedButton(onClick = { selectedCard?.let { vm.replaceDeadCard(it) }; selectedCard = null }, enabled = selectedCard != null && isMyTurn) { 
                     Text(text = "Replace selected dead card", fontSize = 12.sp) 
+                }
+            }
+        }
+        
+        // Center Screen Animation Overlay
+        Box(Modifier.fillMaxSize().padding(bottom = 120.dp), contentAlignment = Alignment.Center) {
+            AnimatedVisibility(
+                visible = centralCardToDisplay != null,
+                enter = scaleIn(tween(200), 0.5f) + fadeIn(tween(200)),
+                exit = scaleOut(tween(300), 1.5f) + fadeOut(tween(300))
+            ) {
+                centralCardToDisplay?.let { cCard ->
+                    Card(
+                        modifier = Modifier.size(120.dp, 160.dp).shadow(12.dp, MaterialTheme.shapes.medium).border(2.dp, Color.Gray, MaterialTheme.shapes.medium),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(text = cCard.rank, fontSize = 42.sp, fontWeight = FontWeight.Bold, color = if (cCard.suit == "♥" || cCard.suit == "♦") Color.Red else Color.Black)
+                            Text(text = cCard.suit, fontSize = 36.sp, color = if (cCard.suit == "♥" || cCard.suit == "♦") Color.Red else Color.Black)
+                        }
+                    }
                 }
             }
         }

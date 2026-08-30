@@ -49,7 +49,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.security.SecureRandom
 import kotlin.random.Random
 
 // ==============================================================================
@@ -295,9 +294,7 @@ class GameViewModel : ViewModel() {
         currentPlayerIndex = 0
         _selectedCardId.value = null
         
-        deck = buildTwoDecks().toMutableList()
-        repeat(10) { deck = deck.shuffled(random).toMutableList() }
-        
+        deck = buildTwoDecks().shuffled(random).toMutableList()
         var idCounter = 10000
         _board.value = List(10) { row -> 
             List(10) { col -> 
@@ -773,28 +770,26 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
 
 @Composable
 private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
-    val bgBrush = when { 
-        space.card.rank == Rank.CORNER -> Brush.linearGradient(listOf(Color(0xFFFFE082), Color(0xFFFFCA28)))
-        space.isHighlighted -> Brush.linearGradient(listOf(Color(0xFFA5D6A7), Color(0xFF81C784)))
-        space.isCompletedSequence -> Brush.linearGradient(listOf(space.occupant.uiColor.copy(alpha = 0.15f), space.occupant.uiColor.copy(alpha = 0.25f)))
-        else -> Brush.linearGradient(listOf(Color.White, Color(0xFFF3F3F3)))
+    val bg = when { 
+        space.card.rank == Rank.CORNER -> Color(0xFFFFD75E)
+        space.isHighlighted -> Color(0xFF9EE6AC)
+        space.isCompletedSequence -> space.occupant.uiColor.copy(alpha = 0.18f)
+        else -> Color.White 
     }
-    
     val borderC = when { 
         space.isHighlighted -> Color(0xFF07852B)
         space.isCompletedSequence -> space.occupant.uiColor
-        else -> Color(0xFFDDDDDD) 
+        else -> Color(0xFF777777) 
     }
     
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.68f)
-            .padding(1.dp)
-            .shadow(2.dp, MaterialTheme.shapes.extraSmall)
-            .background(bgBrush, MaterialTheme.shapes.extraSmall)
-            .border(if (space.isHighlighted || space.isCompletedSequence) 2.dp else 0.5.dp, borderC, MaterialTheme.shapes.extraSmall)
+            .background(bg, MaterialTheme.shapes.extraSmall)
+            .border(if (space.isHighlighted || space.isCompletedSequence) 2.dp else 0.6.dp, borderC, MaterialTheme.shapes.extraSmall)
             .clickable(enabled = space.isHighlighted, onClick = onClick)
+            .padding(1.dp)
     ) {
         if (space.card.rank == Rank.CORNER) { 
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) { 
@@ -810,21 +805,14 @@ private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
         }
         
         if (space.occupant != TeamColor.NONE) { 
-            val chipAlpha = if (space.isCompletedSequence) 0.62f else 0.9f
-            val chipBaseColor = space.occupant.uiColor
-            val cColor1 = chipBaseColor.copy(alpha = chipAlpha)
-            val cColor2 = chipBaseColor.copy(alpha = (chipAlpha - 0.2f).coerceAtLeast(0.1f))
-            val chipBrush = Brush.radialGradient(listOf(cColor2, cColor1))
-            
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 2.dp)
                     .fillMaxWidth(0.68f)
                     .aspectRatio(1f)
-                    .shadow(2.dp, CircleShape)
                     .clip(CircleShape)
-                    .background(chipBrush)
+                    .background(space.occupant.uiColor.copy(alpha = if (space.isCompletedSequence) 0.62f else 0.9f))
                     .border(
                         if (space.isCompletedSequence) 2.dp else 1.dp, 
                         if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), 
@@ -849,12 +837,12 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
         Row(Modifier.fillMaxWidth().height(76.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             player.hand.forEach { card ->
                 val selected = card.uniqueId == selectedCardId
-                Box(
+                Card(
                     modifier = Modifier.weight(1f).fillMaxHeight()
-                        .shadow(if (selected) 6.dp else 2.dp, MaterialTheme.shapes.small)
-                        .background(Brush.linearGradient(listOf(Color.White, Color(0xFFF7F7F7))), MaterialTheme.shapes.small)
                         .border(if (selected) 3.dp else 1.dp, if (selected) Color(0xFF07852B) else Color.LightGray, MaterialTheme.shapes.small)
-                        .clickable { onSelect(card.uniqueId) }
+                        .clickable { onSelect(card.uniqueId) }, 
+                    colors = CardDefaults.cardColors(containerColor = Color.White), 
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Text(text = card.rank.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = card.suit.color)
@@ -1550,19 +1538,18 @@ class MultiplayerViewModel : ViewModel() {
             }
         }
 
-        val secureRnd = SecureRandom()
         var shuff1 = list1.toList()
         var shuff2 = list2.toList()
         
         repeat(2) {
-            shuff1 = shuff1.shuffled(secureRnd)
-            shuff2 = shuff2.shuffled(secureRnd)
+            shuff1 = shuff1.shuffled()
+            shuff2 = shuff2.shuffled()
         }
         
         var combined = shuff1 + shuff2
         
-        repeat(10) {
-            combined = combined.shuffled(secureRnd)
+        repeat(5) {
+            combined = combined.shuffled()
         }
         
         return combined
@@ -1757,7 +1744,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     var selectedCard by remember { mutableStateOf<FBCard?>(null) }
     var showScorecard by remember { mutableStateOf(true) }
     
-    // Central Play Animation State
     var centralCardToDisplay by remember { mutableStateOf<FBCard?>(null) }
     var animationTrigger by remember(room.lastPlayedCard) { mutableStateOf(room.lastPlayedCard) }
     
@@ -1776,11 +1762,10 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         }
     }
 
-    // Trigger the central animation when lastPlayedCard changes
     LaunchedEffect(animationTrigger) {
         if (animationTrigger != null) {
             centralCardToDisplay = animationTrigger
-            delay(1000)
+            delay(600)
             centralCardToDisplay = null
         }
     }
@@ -1928,14 +1913,13 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
             }
 
-            // Staggered Dealing Animation Engine
             val visibleCardIds = remember { mutableStateListOf<Int>() }
             LaunchedEffect(myPlayer?.hand) {
                 val hand = myPlayer?.hand ?: emptyList()
                 visibleCardIds.retainAll(hand.map { it.id }.toSet())
                 hand.forEach { c ->
                     if (!visibleCardIds.contains(c.id)) {
-                        delay(150)
+                        delay(50)
                         visibleCardIds.add(c.id)
                     }
                 }
@@ -1976,12 +1960,11 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             }
         }
         
-        // Center Screen Animation Overlay
         Box(Modifier.fillMaxSize().padding(bottom = 120.dp), contentAlignment = Alignment.Center) {
             AnimatedVisibility(
                 visible = centralCardToDisplay != null,
-                enter = scaleIn(tween(200), 0.5f) + fadeIn(tween(200)),
-                exit = scaleOut(tween(300), 1.5f) + fadeOut(tween(300))
+                enter = scaleIn(tween(150), 0.5f) + fadeIn(tween(150)),
+                exit = scaleOut(tween(200), 1.5f) + fadeOut(tween(200))
             ) {
                 centralCardToDisplay?.let { cCard ->
                     Card(

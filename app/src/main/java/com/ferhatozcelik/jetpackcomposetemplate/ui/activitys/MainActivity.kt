@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import kotlin.random.Random
+import kotlin.math.max
 
 // ==============================================================================
 // GLOBAL STATIC BOARD LAYOUT
@@ -990,19 +991,6 @@ data class GameRoom(
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
 
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
-    when (viewModel.currentAppState) {
-        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
-        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
-        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
-    }
-}
-
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
     var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
@@ -1015,7 +1003,15 @@ class MultiplayerViewModel : ViewModel() {
     val roomData: StateFlow<GameRoom> = _roomData.asStateFlow()
     private var roomListener: ValueEventListener? = null
     
+    var lastReadMessageCount by mutableIntStateOf(0)
+    
     private val myPlayerId: Int get() = _roomData.value.players.firstOrNull { it.playerName == playerName }?.playerId ?: -1
+
+    fun getRelevantMessageCount(): Int {
+        val room = _roomData.value
+        val myTeam = room.players.firstOrNull { it.playerName == playerName }?.team ?: "Team1"
+        return room.chatMessages.values.count { !it.isTeamOnly || (it.isTeamOnly && it.team == myTeam) }
+    }
 
     fun backToLobby() {
         currentAppState = OnlineAppState.LOBBY
@@ -1668,6 +1664,7 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
     }
 
     LaunchedEffect(filteredMessages.size) {
+        vm.lastReadMessageCount = vm.getRelevantMessageCount() // Auto-mark read while open
         if (filteredMessages.isNotEmpty()) {
             listState.scrollToItem(filteredMessages.size - 1)
         }
@@ -1736,6 +1733,19 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
 // ==============================================================================
 // ONLINE SCREENS
 // ==============================================================================
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
+    when (viewModel.currentAppState) {
+        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
+    }
+}
+
 @Composable
 fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -1812,13 +1822,22 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val isHost = room.hostName == vm.playerName
     val context = LocalContext.current
     var showChat by remember { mutableStateOf(false) }
+    val unreadCount = max(0, vm.getRelevantMessageCount() - vm.lastReadMessageCount)
 
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             val rc = room.roomId
             Text(text = "Room: $rc", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-            Button(onClick = { showChat = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00ACC1))) { 
-                Text("💬 Chat") 
+            Button(onClick = { showChat = true; vm.lastReadMessageCount = vm.getRelevantMessageCount() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00ACC1))) { 
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("💬 Chat")
+                    if (unreadCount > 0) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(modifier = Modifier.size(20.dp).background(Color.Red, CircleShape), contentAlignment = Alignment.Center) {
+                            Text(text = "$unreadCount", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
         
@@ -1936,7 +1955,9 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     var selectedCard by remember { mutableStateOf<FBCard?>(null) }
     var showScorecard by remember { mutableStateOf(true) }
     var showChat by remember { mutableStateOf(false) }
+    val unreadCount = max(0, vm.getRelevantMessageCount() - vm.lastReadMessageCount)
     
+    // Central Play Animation State
     var centralCardToDisplay by remember { mutableStateOf<FBCard?>(null) }
     var animationTrigger by remember(room.lastPlayedCard) { mutableStateOf(room.lastPlayedCard) }
     
@@ -2051,7 +2072,17 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val sStr = "$teamSequences/$reqSequences"
                     Text(text = sStr, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = myTeamColor, modifier = Modifier.padding(end = 4.dp))
-                    TextButton(onClick = { showChat = true }, contentPadding = PaddingValues(2.dp)) { Text("💬 Chat", fontSize=12.sp, color = Color(0xFF00ACC1)) }
+                    TextButton(onClick = { showChat = true; vm.lastReadMessageCount = vm.getRelevantMessageCount() }, contentPadding = PaddingValues(2.dp)) { 
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("💬 Chat", fontSize=12.sp, color = Color(0xFF00ACC1))
+                            if (unreadCount > 0) {
+                                Spacer(Modifier.width(4.dp))
+                                Box(modifier = Modifier.size(16.dp).background(Color.Red, CircleShape), contentAlignment = Alignment.Center) {
+                                    Text(text = "$unreadCount", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
                     TextButton(onClick = { vm.syncPresence() }, contentPadding = PaddingValues(2.dp)) { Text(text = "Sync", fontSize=12.sp) }
                     TextButton(onClick = { vm.backToLobby(); onExit() }, contentPadding = PaddingValues(2.dp)) { Text(text = "Exit", fontSize=12.sp, color = Color.Red) }
                 }
@@ -2188,6 +2219,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             }
         }
         
+        // Center Screen Animation Overlay
         Box(Modifier.fillMaxSize().padding(bottom = 120.dp), contentAlignment = Alignment.Center) {
             AnimatedVisibility(
                 visible = centralCardToDisplay != null,
@@ -2363,7 +2395,17 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                                TextButton(onClick = { showChat = true }) { Text("💬 Chat", color = Color(0xFF00ACC1)) }
+                                TextButton(onClick = { showChat = true; vm.lastReadMessageCount = vm.getRelevantMessageCount() }) { 
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("💬 Chat", color = Color(0xFF00ACC1))
+                                        if (unreadCount > 0) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Box(modifier = Modifier.size(18.dp).background(Color.Red, CircleShape), contentAlignment = Alignment.Center) {
+                                                Text(text = "$unreadCount", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
                                 TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
                                 TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }
                                 TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }

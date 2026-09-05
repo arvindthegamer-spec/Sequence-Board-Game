@@ -991,19 +991,6 @@ data class GameRoom(
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
 
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
-    when (viewModel.currentAppState) {
-        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
-        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
-        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
-    }
-}
-
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
     var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
@@ -1619,7 +1606,6 @@ class MultiplayerViewModel : ViewModel() {
     }
 
     private fun buildDeck(): List<FBCard> {
-        val secureRnd = SecureRandom()
         val initialList = mutableListOf<FBCard>()
         var id = 0
         repeat(2) {
@@ -1634,11 +1620,11 @@ class MultiplayerViewModel : ViewModel() {
         
         repeat(10) {
             val halfSize = currentDeck.size / 2
-            val half1 = currentDeck.take(halfSize).shuffled(secureRnd)
-            val half2 = currentDeck.drop(halfSize).shuffled(secureRnd)
+            val half1 = currentDeck.take(halfSize).shuffled(Random.Default)
+            val half2 = currentDeck.drop(halfSize).shuffled(Random.Default)
             
             val combined = half1 + half2
-            currentDeck = combined.shuffled(secureRnd)
+            currentDeck = combined.shuffled(Random.Default)
         }
         
         return currentDeck
@@ -1959,7 +1945,6 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val room by vm.roomData.collectAsState()
@@ -2064,7 +2049,9 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 // Left side: Messages
                 Column(Modifier.weight(1f)) {
-                    Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp)
+                    }
                     val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
                     Text(text = rInfo, fontSize = 10.sp, color = Color.Gray)
                 }
@@ -2187,7 +2174,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
             }
 
-            // Staggered Dealing Animation Engine
             val visibleCardIds = remember { mutableStateListOf<Int>() }
             LaunchedEffect(myPlayer?.hand) {
                 val hand = myPlayer?.hand ?: emptyList()

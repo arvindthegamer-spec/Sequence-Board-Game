@@ -80,14 +80,13 @@ object HistoryManager {
         val prefs = context.getSharedPreferences("SeqHistory", Context.MODE_PRIVATE)
         val history = prefs.getStringSet("matches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
         
-        val matchId = "${room.roomId}_${room.matchNumber}"
-        
         val totalMatchSecs = if (room.matchStartTime > 0) (System.currentTimeMillis() - room.matchStartTime) / 1000 else 0
         val mHr = totalMatchSecs / 3600
         val mMin = (totalMatchSecs % 3600) / 60
         val mSec = totalMatchSecs % 60
         val timeStr = if (mHr > 0) String.format("%02d:%02d:%02d", mHr, mMin, mSec) else String.format("%02d:%02d", mMin, mSec)
         
+        val matchId = "${room.roomId}_${room.matchNumber}"
         if (history.none { it.startsWith(matchId) }) {
             val groupKey = "${room.sessionStartTimeStr} (Room: ${room.roomId})"
             val record = "$matchId|$groupKey|${room.matchNumber}|${room.winnerTeam}|$timeStr"
@@ -938,7 +937,8 @@ data class GameRoom(
     var teamColors: Map<String, Long> = emptyMap(), var matchNumber: Int = 1,
     var matchHistory: List<String> = emptyList(), var consecutiveWins: Int = 0, var lastWinningTeam: String = "",
     var matchStartTime: Long = 0L, var sessionStartTimeStr: String = "",
-    var lastPlayedCard: FBCard? = null
+    var lastPlayedCard: FBCard? = null,
+    var timerEnabled: Boolean = false, var timerDurationSecs: Int = 30, var currentTurnStartTime: Long = 0L
 )
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
@@ -956,7 +956,6 @@ class MultiplayerViewModel : ViewModel() {
     private var roomListener: ValueEventListener? = null
     
     private val myPlayerId: Int get() = _roomData.value.players.firstOrNull { it.playerName == playerName }?.playerId ?: -1
-    private var turnStartTime: Long = 0L
 
     fun backToLobby() {
         currentAppState = OnlineAppState.LOBBY
@@ -983,6 +982,15 @@ class MultiplayerViewModel : ViewModel() {
         db.child("rooms").child(roomCode).updateChildren(mapOf(
             "deck" to newDeck,
             "message" to "Host shuffled the deck manually!"
+        ))
+    }
+    
+    fun updateTimerSettings(enabled: Boolean, duration: Int) {
+        val room = _roomData.value
+        if (room.hostName != playerName) return
+        db.child("rooms").child(roomCode).updateChildren(mapOf(
+            "timerEnabled" to enabled,
+            "timerDurationSecs" to duration
         ))
     }
 
@@ -1020,7 +1028,8 @@ class MultiplayerViewModel : ViewModel() {
             hostName = playerName, originalHostName = playerName,
             numberOfTeams = 2, turnPlayerId = 1, message = "Waiting for players...",
             board = buildInitialBoard(), players = listOf(hostPlayer), deck = buildDeck(), 
-            teamColors = defaultColors, sessionStartTimeStr = dateStr, lastPlayedCard = null
+            teamColors = defaultColors, sessionStartTimeStr = dateStr, lastPlayedCard = null,
+            timerEnabled = false, timerDurationSecs = 30, currentTurnStartTime = 0L
         )
         
         db.child("rooms").child(roomCode).setValue(initialRoom).addOnSuccessListener { 
@@ -1164,14 +1173,10 @@ class MultiplayerViewModel : ViewModel() {
             } 
         }
 
-        var currentDeck = room.deck.toMutableList()
-        if (currentDeck.size < 104) {
-            currentDeck = buildDeck().toMutableList()
-        }
-
+        val currentDeck = buildDeck().toMutableList()
         val handSize = when (pCount) { 2 -> 7; 3, 4 -> 6; 6 -> 5; 8, 9 -> 4; else -> 3 }
-        
         val hands = Array(pCount) { mutableListOf<FBCard>() }
+        
         repeat(handSize) {
             for (i in 0 until pCount) {
                 if (currentDeck.isNotEmpty()) {
@@ -1194,7 +1199,8 @@ class MultiplayerViewModel : ViewModel() {
             "turnPlayerId" to firstPlayerId, 
             "message" to "Game started! $firstPlayerName's turn.",
             "matchStartTime" to System.currentTimeMillis(),
-            "lastPlayedCard" to null
+            "lastPlayedCard" to null,
+            "currentTurnStartTime" to System.currentTimeMillis()
         )
         db.child("rooms").child(roomCode).updateChildren(updates)
     }
@@ -1234,14 +1240,10 @@ class MultiplayerViewModel : ViewModel() {
             } 
         }
 
-        var newDeck = room.deck.toMutableList()
-        if (newDeck.size < 104) {
-            newDeck = buildDeck().toMutableList()
-        }
-
+        val newDeck = buildDeck().toMutableList()
         val handSize = when { pCount <= 2 -> 7; pCount in 3..4 -> 6; pCount == 6 -> 5; pCount in 8..9 -> 4; else -> 3 }
-        
         val hands = Array(pCount) { mutableListOf<FBCard>() }
+        
         repeat(handSize) {
             for (i in 0 until pCount) {
                 if (newDeck.isNotEmpty()) {
@@ -1270,7 +1272,8 @@ class MultiplayerViewModel : ViewModel() {
             "lastMoveRow" to -1, 
             "lastMoveCol" to -1, 
             "matchNumber" to room.matchNumber + 1,
-            "lastPlayedCard" to null
+            "lastPlayedCard" to null,
+            "currentTurnStartTime" to System.currentTimeMillis()
         )
         db.child("rooms").child(roomCode).updateChildren(updates)
     }
@@ -1286,9 +1289,6 @@ class MultiplayerViewModel : ViewModel() {
                     
                     if (room.status == "PLAYING" && currentAppState == OnlineAppState.WAITING_ROOM) {
                         currentAppState = OnlineAppState.PLAYING
-                    }
-                    if (!wasMyTurn && isMyTurnNow) {
-                        turnStartTime = System.currentTimeMillis()
                     }
                     
                     val isHostOnline = room.presence[room.hostName] == true
@@ -1326,7 +1326,11 @@ class MultiplayerViewModel : ViewModel() {
             } else {
                 val nextTurnId = if (room.turnPlayerId >= room.players.size) 1 else room.turnPlayerId + 1
                 val nextPlayerName = room.players.firstOrNull { it.playerId == nextTurnId }?.playerName ?: "Player $nextTurnId"
-                db.child("rooms").child(roomCode).updateChildren(mapOf("turnPlayerId" to nextTurnId, "message" to "CPU (${cpuPlayer.playerName}) had no moves. $nextPlayerName's turn."))
+                db.child("rooms").child(roomCode).updateChildren(mapOf(
+                    "turnPlayerId" to nextTurnId, 
+                    "message" to "CPU (${cpuPlayer.playerName}) had no moves. $nextPlayerName's turn.",
+                    "currentTurnStartTime" to System.currentTimeMillis()
+                ))
             }
         }
     }
@@ -1427,8 +1431,7 @@ class MultiplayerViewModel : ViewModel() {
         if (deckList.isNotEmpty()) updatedHand.add(deckList.removeAt(0))
 
         val currentMillis = System.currentTimeMillis()
-        val timeTaken = if (isCpu) 1500L else if (turnStartTime > 0L) currentMillis - turnStartTime else 0L
-        turnStartTime = 0L
+        val timeTaken = if (isCpu) 1500L else if (room.currentTurnStartTime > 0L) currentMillis - room.currentTurnStartTime else 0L
 
         val updatedPlayers = room.players.map { p -> 
             if (p.playerId == actingPlayer.playerId) p.copy(hand = updatedHand, wildUsed = p.wildUsed + if(card.isTwoEyedJack) 1 else 0, removeUsed = p.removeUsed + if(card.isOneEyedJack) 1 else 0, timePlayedMs = p.timePlayedMs + timeTaken) else p 
@@ -1476,13 +1479,13 @@ class MultiplayerViewModel : ViewModel() {
             _roomData.value = room.copy(
                 board = updatedBoard, deck = deckList, players = updatedPlayers, 
                 turnPlayerId = nextTurnId, message = "$actionMsg $nextPlayerName's turn.", 
-                lastMoveRow = row, lastMoveCol = col, lastPlayedCard = card
+                lastMoveRow = row, lastMoveCol = col, lastPlayedCard = card, currentTurnStartTime = System.currentTimeMillis()
             )
 
             val updates = mapOf(
                 "board" to updatedBoard, "deck" to deckList, "players" to updatedPlayers, 
                 "turnPlayerId" to nextTurnId, "message" to "$actionMsg $nextPlayerName's turn.", 
-                "lastMoveRow" to row, "lastMoveCol" to col, "lastPlayedCard" to card
+                "lastMoveRow" to row, "lastMoveCol" to col, "lastPlayedCard" to card, "currentTurnStartTime" to System.currentTimeMillis()
             )
             db.child("rooms").child(roomCode).updateChildren(updates)
         }
@@ -1513,8 +1516,7 @@ class MultiplayerViewModel : ViewModel() {
         if (deckList.isNotEmpty()) updatedHand.add(deckList.removeAt(0))
 
         val currentMillis = System.currentTimeMillis()
-        val timeTaken = if (isCpu) 1500L else if (turnStartTime > 0L) currentMillis - turnStartTime else 0L
-        turnStartTime = 0L
+        val timeTaken = if (isCpu) 1500L else if (room.currentTurnStartTime > 0L) currentMillis - room.currentTurnStartTime else 0L
 
         val updatedPlayers = room.players.map { 
             if (it.playerId == actingPlayer.playerId) it.copy(hand = updatedHand, timePlayedMs = it.timePlayedMs + timeTaken) else it 
@@ -1523,11 +1525,11 @@ class MultiplayerViewModel : ViewModel() {
 
         // Optimistic UI update
         _roomData.value = room.copy(
-            deck = deckList, players = updatedPlayers, message = "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", lastPlayedCard = card
+            deck = deckList, players = updatedPlayers, message = "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", lastPlayedCard = card, currentTurnStartTime = System.currentTimeMillis()
         )
 
         db.child("rooms").child(roomCode).updateChildren(
-            mapOf("deck" to deckList, "players" to updatedPlayers, "message" to "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", "lastPlayedCard" to card)
+            mapOf("deck" to deckList, "players" to updatedPlayers, "message" to "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", "lastPlayedCard" to card, "currentTurnStartTime" to System.currentTimeMillis())
         )
     }
 
@@ -1706,8 +1708,26 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                     } 
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                Text(text = "Turn Timer:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Spacer(Modifier.width(8.dp))
+                listOf(0, 15, 30, 60).forEach { t -> 
+                    val isSelected = if (t == 0) !room.timerEnabled else (room.timerEnabled && room.timerDurationSecs == t)
+                    Button(
+                        onClick = { vm.updateTimerSettings(t > 0, if (t > 0) t else 30) }, 
+                        colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color(0xFF1976D2) else Color.Gray),
+                        modifier = Modifier.padding(horizontal = 2.dp).height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) { 
+                        Text(text = if (t == 0) "Off" else "${t}s", fontSize = 11.sp) 
+                    } 
+                }
+            }
         } else {
             Text(text = "Teams: ${room.numberOfTeams}", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(top = 16.dp))
+            val tStr = if (room.timerEnabled) "${room.timerDurationSecs}s" else "Off"
+            Text(text = "Turn Timer: $tStr", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.DarkGray)
         }
 
         if (vm.lobbyError.isNotEmpty()) {
@@ -1752,6 +1772,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     
     val context = LocalContext.current
     var matchSeconds by remember { mutableStateOf(0L) }
+    var turnTimeRemaining by remember { mutableStateOf(0) }
     
     LaunchedEffect(room.status, room.matchStartTime) {
         if(room.status == "PLAYING" && room.matchStartTime > 0) {
@@ -1761,6 +1782,28 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             showScorecard = true
             if (room.winnerTeam.isNotEmpty() && room.players.isNotEmpty()) {
                 HistoryManager.saveMatch(context, room)
+            }
+        }
+    }
+
+    LaunchedEffect(room.status, room.currentTurnStartTime, room.timerEnabled) {
+        if (room.status == "PLAYING" && room.timerEnabled) {
+            while (true) {
+                val elapsed = (System.currentTimeMillis() - room.currentTurnStartTime) / 1000
+                turnTimeRemaining = (room.timerDurationSecs - elapsed).toInt().coerceAtLeast(0)
+                
+                if (turnTimeRemaining <= 0) {
+                    if (isMyTurn) {
+                        vm.triggerCpuTurn(room.turnPlayerId)
+                        break
+                    } else if (vm.playerName == room.hostName) {
+                        if (elapsed >= room.timerDurationSecs + 2) {
+                            vm.triggerCpuTurn(room.turnPlayerId)
+                            break
+                        }
+                    }
+                }
+                delay(200)
             }
         }
     }
@@ -1816,7 +1859,14 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 15.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 15.sp)
+                        if (room.timerEnabled && room.status == "PLAYING") {
+                            Spacer(Modifier.width(8.dp))
+                            val tColor = if (turnTimeRemaining <= 5) Color.Red else Color(0xFFE65100)
+                            Text(text = "⏱ ${turnTimeRemaining}s", fontWeight = FontWeight.Bold, color = tColor, fontSize = 15.sp)
+                        }
+                    }
                     val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
                     Text(text = rInfo, fontSize = 11.sp, color = Color.Gray)
                 }
@@ -2044,6 +2094,21 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                         ) { 
                                             Text(text = tCount.toString(), fontSize = 11.sp) 
+                                        } 
+                                    }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                    Text(text = "Timer:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Spacer(Modifier.width(8.dp))
+                                    listOf(0, 15, 30, 60).forEach { t -> 
+                                        val isSelected = if (t == 0) !room.timerEnabled else (room.timerEnabled && room.timerDurationSecs == t)
+                                        Button(
+                                            onClick = { vm.updateTimerSettings(t > 0, if (t > 0) t else 30) }, 
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color(0xFF1976D2) else Color.Gray),
+                                            modifier = Modifier.padding(horizontal = 2.dp).height(28.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                        ) { 
+                                            Text(text = if (t == 0) "Off" else "${t}s", fontSize = 11.sp) 
                                         } 
                                     }
                                 }

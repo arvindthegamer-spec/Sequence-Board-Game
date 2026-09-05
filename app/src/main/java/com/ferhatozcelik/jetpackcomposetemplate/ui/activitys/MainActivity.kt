@@ -991,6 +991,19 @@ data class GameRoom(
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
 
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
+    when (viewModel.currentAppState) {
+        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
+    }
+}
+
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
     var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
@@ -1003,7 +1016,7 @@ class MultiplayerViewModel : ViewModel() {
     val roomData: StateFlow<GameRoom> = _roomData.asStateFlow()
     private var roomListener: ValueEventListener? = null
     
-    var lastReadMessageCount by mutableIntStateOf(0)
+    var lastReadMessageCount by mutableStateOf(0)
     
     private val myPlayerId: Int get() = _roomData.value.players.firstOrNull { it.playerName == playerName }?.playerId ?: -1
 
@@ -1666,7 +1679,7 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
     LaunchedEffect(filteredMessages.size) {
         vm.lastReadMessageCount = vm.getRelevantMessageCount() // Auto-mark read while open
         if (filteredMessages.isNotEmpty()) {
-            listState.scrollToItem(filteredMessages.size - 1)
+            listState.scrollToItem(max(0, filteredMessages.size - 1))
         }
     }
 
@@ -2047,15 +2060,16 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
+            // New Clean Top Bar Layout
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                // Left side: Messages
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp)
-                    }
+                    Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp)
                     val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
                     Text(text = rInfo, fontSize = 10.sp, color = Color.Gray)
                 }
                 
+                // Center: Time and Turn Timer Display
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 4.dp)) {
                     val h = matchSeconds / 3600
                     val m = (matchSeconds % 3600) / 60
@@ -2069,6 +2083,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                     }
                 }
                 
+                // Right side: Progress & Actions
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val sStr = "$teamSequences/$reqSequences"
                     Text(text = sStr, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = myTeamColor, modifier = Modifier.padding(end = 4.dp))
@@ -2172,6 +2187,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
             }
 
+            // Staggered Dealing Animation Engine
             val visibleCardIds = remember { mutableStateListOf<Int>() }
             LaunchedEffect(myPlayer?.hand) {
                 val hand = myPlayer?.hand ?: emptyList()

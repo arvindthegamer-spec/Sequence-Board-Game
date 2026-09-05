@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.security.SecureRandom
 import kotlin.random.Random
 
 // ==============================================================================
@@ -194,6 +195,61 @@ fun InstructionsScreen(onExit: () -> Unit) {
 
                 Text(text = "In-Game Chat", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1976D2))
                 Text(text = "You can chat with players in the lobby, during the game, and on the scorecard! Use the toggle switch in the chat window to switch between sending messages to ALL players, or sending private messages only to your TEAM.", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun HistoryScreen(onExit: () -> Unit) {
+    val context = LocalContext.current
+    val historyItems = remember { HistoryManager.getHistory(context) }
+    
+    Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "Match History", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+            TextButton(onClick = onExit) { 
+                Text(text = "Back", color = Color.Red) 
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        
+        if (historyItems.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(text = "No match history found.", color = Color.Gray)
+            }
+        } else {
+            val grouped = historyItems.map { it.split("|") }.groupBy { it.getOrNull(1) ?: "Unknown Session" }
+            LazyColumn(Modifier.fillMaxSize()) {
+                grouped.forEach { (sessionKey, matches) ->
+                    item {
+                        Text(
+                            text = sessionKey, 
+                            fontWeight = FontWeight.Bold, 
+                            fontSize = 15.sp, 
+                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).background(Color(0xFFE3F2FD)).fillMaxWidth().padding(8.dp)
+                        )
+                    }
+                    item {
+                        Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(8.dp)) {
+                            Text(text = "Match", Modifier.weight(0.3f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Winner", Modifier.weight(0.4f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Duration", Modifier.weight(0.3f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    items(matches.sortedBy { it.getOrNull(2)?.toIntOrNull() ?: 0 }) { matchData ->
+                        val mNum = matchData.getOrNull(2) ?: ""
+                        val winner = matchData.getOrNull(3) ?: ""
+                        val time = matchData.getOrNull(4) ?: ""
+                        
+                        Row(Modifier.fillMaxWidth().padding(8.dp)) {
+                            Text(text = mNum, Modifier.weight(0.3f), fontSize = 14.sp)
+                            Text(text = winner, Modifier.weight(0.4f), fontSize = 14.sp, color = Color(0xFF07852B), fontWeight = FontWeight.Bold)
+                            Text(text = time, Modifier.weight(0.3f), fontSize = 14.sp)
+                        }
+                        Divider(color = Color.LightGray, thickness = 0.5.dp)
+                    }
+                }
             }
         }
     }
@@ -934,6 +990,19 @@ data class GameRoom(
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
 
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
+    when (viewModel.currentAppState) {
+        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
+    }
+}
+
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
     var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
@@ -1541,6 +1610,7 @@ class MultiplayerViewModel : ViewModel() {
     }
 
     private fun buildDeck(): List<FBCard> {
+        val secureRnd = SecureRandom()
         val initialList = mutableListOf<FBCard>()
         var id = 0
         repeat(2) {
@@ -1555,11 +1625,11 @@ class MultiplayerViewModel : ViewModel() {
         
         repeat(10) {
             val halfSize = currentDeck.size / 2
-            val half1 = currentDeck.take(halfSize).shuffled(Random.Default)
-            val half2 = currentDeck.drop(halfSize).shuffled(Random.Default)
+            val half1 = currentDeck.take(halfSize).shuffled(secureRnd)
+            val half2 = currentDeck.drop(halfSize).shuffled(secureRnd)
             
             val combined = half1 + half2
-            currentDeck = combined.shuffled(Random.Default)
+            currentDeck = combined.shuffled(secureRnd)
         }
         
         return currentDeck
@@ -1667,6 +1737,76 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
 // ONLINE SCREENS
 // ==============================================================================
 @Composable
+fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(text = "Online Multiplayer", fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 32.dp))
+        Button(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME; vm.lobbyError = "" }, modifier = Modifier.fillMaxWidth(0.6f).padding(8.dp)) { 
+            Text(text = "Play Online") 
+        }
+        TextButton(onClick = onExit, modifier = Modifier.padding(top = 32.dp)) { 
+            Text(text = "Back to Main Menu", color = Color.Red) 
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnlineEnterNameScreen(vm: MultiplayerViewModel) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("SeqPrefs", Context.MODE_PRIVATE)
+    var nameInput by remember { mutableStateOf(prefs.getString("saved_name", "") ?: "") }
+    
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(text = "Enter Your Name", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = nameInput, onValueChange = { nameInput = it }, label = { Text(text = "Display Name") }, modifier = Modifier.padding(vertical = 16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.proceedToCreate(nameInput, context) }) { Text(text = "Create Room") }
+            Button(onClick = { vm.proceedToJoin(nameInput, context) }) { Text(text = "Join Room") }
+        }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.LOBBY }) { Text(text = "Back") }
+        if (vm.lobbyError.isNotEmpty()) {
+            Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnlineCreateScreen(vm: MultiplayerViewModel) {
+    var password by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        val rc = vm.roomCode
+        Text(text = "Room Code: $rc", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Optional Password") }, modifier = Modifier.padding(vertical = 8.dp))
+        Spacer(Modifier.height(32.dp))
+        Button(onClick = { vm.executeCreateRoom(password, context) }) { Text(text = "Open Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text(text = "Cancel") }
+        if (vm.lobbyError.isNotEmpty()) {
+            Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnlineJoinScreen(vm: MultiplayerViewModel) {
+    var code by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(text = "Join Friend's Room", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = code, onValueChange = { code = it }, label = { Text(text = "4-Digit Room Code") })
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Password (if any)") }, modifier = Modifier.padding(vertical = 12.dp))
+        Button(onClick = { vm.joinRoom(code, password) }) { Text(text = "Join Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text(text = "Cancel") }
+        if (vm.lobbyError.isNotEmpty()) {
+            Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+@Composable
 fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val room by vm.roomData.collectAsState()
     val isHost = room.hostName == vm.playerName
@@ -1731,13 +1871,12 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
                 Text(text = "Turn Timer:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 Spacer(Modifier.width(8.dp))
-                Switch(
+                Checkbox(
                     checked = room.timerEnabled, 
                     onCheckedChange = { vm.updateTimerSettings(it, room.timerDurationSecs, context) }
                 )
                 if (room.timerEnabled) {
                     var tVal by remember(room.timerDurationSecs) { mutableStateOf(room.timerDurationSecs.toString()) }
-                    Spacer(Modifier.width(8.dp))
                     BasicTextField(
                         value = tVal,
                         onValueChange = { newVal -> 
@@ -1770,7 +1909,7 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 Button(onClick = { vm.hostManualShuffle() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))) { 
                     Text(text = "Shuffle Deck") 
                 }
-                Button(onClick = { vm.executeCreateRoom(room.password, context); vm.hostStartGame() }) { Text(text = "START GAME") } 
+                Button(onClick = { vm.hostStartGame() }) { Text(text = "START GAME") } 
             }
         } 
         else { 
@@ -1798,7 +1937,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     var showScorecard by remember { mutableStateOf(true) }
     var showChat by remember { mutableStateOf(false) }
     
-    // Central Play Animation State
     var centralCardToDisplay by remember { mutableStateOf<FBCard?>(null) }
     var animationTrigger by remember(room.lastPlayedCard) { mutableStateOf(room.lastPlayedCard) }
     
@@ -1840,7 +1978,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         }
     }
 
-    // Trigger the central animation when lastPlayedCard changes
     LaunchedEffect(animationTrigger) {
         if (animationTrigger != null) {
             centralCardToDisplay = animationTrigger
@@ -1889,16 +2026,15 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
-            // New Clean Top Bar Layout
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                // Left side: Messages
                 Column(Modifier.weight(1f)) {
-                    Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp)
+                    }
                     val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
                     Text(text = rInfo, fontSize = 10.sp, color = Color.Gray)
                 }
                 
-                // Center: Time and Turn Timer Display
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 4.dp)) {
                     val h = matchSeconds / 3600
                     val m = (matchSeconds % 3600) / 60
@@ -1912,7 +2048,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                     }
                 }
                 
-                // Right side: Progress & Actions
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val sStr = "$teamSequences/$reqSequences"
                     Text(text = sStr, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = myTeamColor, modifier = Modifier.padding(end = 4.dp))
@@ -2006,7 +2141,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 }
             }
 
-            // Staggered Dealing Animation Engine
             val visibleCardIds = remember { mutableStateListOf<Int>() }
             LaunchedEffect(myPlayer?.hand) {
                 val hand = myPlayer?.hand ?: emptyList()
@@ -2054,7 +2188,6 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
             }
         }
         
-        // Center Screen Animation Overlay
         Box(Modifier.fillMaxSize().padding(bottom = 120.dp), contentAlignment = Alignment.Center) {
             AnimatedVisibility(
                 visible = centralCardToDisplay != null,

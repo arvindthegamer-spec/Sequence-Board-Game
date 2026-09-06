@@ -429,16 +429,16 @@ class GameViewModel : ViewModel() {
         updatePlayer(movingPlayer.copy(hand = newHand))
         _selectedCardId.value = null
         
-        val turnSummary = when { 
-            cardUsed.isOneEyedJack -> "Player ${movingPlayer.id} used a Remove Jack,"
-            cardUsed.isTwoEyedJack -> "Player ${movingPlayer.id} used a Wild Jack,"
-            else -> "Player ${movingPlayer.id} placed ${cardUsed.rank.text}${cardUsed.suit.symbol}," 
+        var turnSummary = when { 
+            cardUsed.isOneEyedJack -> "Player ${movingPlayer.id} used a Remove Jack."
+            cardUsed.isTwoEyedJack -> "Player ${movingPlayer.id} used a Wild Jack."
+            else -> "Player ${movingPlayer.id} placed ${cardUsed.rank.text}${cardUsed.suit.symbol}." 
         }
         
         if (!cardUsed.isOneEyedJack) {
             val seqResult = updateSequencesAndCheckWinner(movingPlayer.team)
             if (seqResult == 1) {
-                // Sequence completed check
+                turnSummary += " Sequence completed!" 
             } else if (seqResult == 2) { 
                 gameMessage = "$turnSummary Team ${movingPlayer.team.name} wins!"
                 return 
@@ -469,8 +469,8 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
         clearHighlights()
         
-        val msg = "Player ${currentPlayer.id} replaced a dead card,"
-        advanceTurn(msg)
+        val msg = "Player ${currentPlayer.id} replaced a dead card."
+        gameMessage = "$msg Player ${currentPlayer.id}'s turn."
         checkForDraw()
     }
     
@@ -560,7 +560,7 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
         clearHighlights()
         
-        val p = if (prefix.isNotEmpty()) "$prefix now " else ""
+        val p = if (prefix.isNotEmpty()) "$prefix " else ""
         if (currentPlayer.isCpu) { 
             currentGameState = GameState.PLAYING
             gameMessage = "${p}CPU ${currentPlayer.id} is thinking..."
@@ -607,13 +607,13 @@ class GameViewModel : ViewModel() {
                 val newHand = cpu.hand.filterNot { it.uniqueId == deadCard.uniqueId }.toMutableList()
                 drawOneCard()?.let(newHand::add)
                 updatePlayer(cpu.copy(hand = newHand))
-                val msg = "CPU ${cpu.id} replaced a dead card,"
+                val msg = "CPU ${cpu.id} replaced a dead card."
                 if (!checkForDraw(msg)) { 
-                    gameMessage = "$msg now CPU ${cpu.id} is thinking..."
+                    gameMessage = "$msg CPU ${cpu.id} is thinking..."
                     startCpuTurn() 
                 }
             } else if (!checkForDraw()) {
-                advanceTurn("CPU ${cpu.id} has no legal move,")
+                advanceTurn("CPU ${cpu.id} has no legal move.")
             }
         }
     }
@@ -784,7 +784,6 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         }
         
         if (board.isNotEmpty()) { 
-            // Fully dynamic grid replacement for offline board to prevent scrolling
             Column(Modifier.weight(1f).fillMaxWidth()) {
                 board.forEach { rowSpaces ->
                     Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -1005,6 +1004,18 @@ data class GameRoom(
 )
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
+
+@Composable
+fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
+    when (viewModel.currentAppState) {
+        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
+    }
+}
 
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
@@ -2077,7 +2088,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
-            // New Clean Top Bar Layout (Message logic moved to bottom)
+            // New Clean Top Bar Layout
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 // Left side: Room Info
                 Column(Modifier.weight(1f)) {

@@ -764,14 +764,7 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().background(Color(0xFFF1F3F4)).padding(5.dp)) {
         Row(Modifier.fillMaxWidth().height(40.dp).padding(bottom = 3.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { 
-                Text(
-                    text = gameViewModel.gameMessage, 
-                    fontSize = 13.sp, 
-                    fontWeight = FontWeight.Bold, 
-                    color = player.team.uiColor, 
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                ) 
+                Text(text = "Classic Offline Play", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) { 
                 val currentSeq = sequenceCounts[player.team] ?: 0
@@ -811,7 +804,7 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         if (!player.isCpu) { 
             val hintString = if (selectedCardId == null) "Select a card to show legal moves" else "Green spaces are legal moves"
             Text(text = hintString, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23))
-            PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard) 
+            PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard, gameViewModel.gameMessage) 
         } else { 
             Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { 
                 Text(text = "CPU cards are hidden", color = Color.Gray) 
@@ -891,7 +884,7 @@ private fun BoardCard(space: BoardSpace, modifier: Modifier = Modifier, onClick:
 }
 
 @Composable
-private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> Unit, onReplaceDeadCard: () -> Unit) {
+private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> Unit, onReplaceDeadCard: () -> Unit, statusMessage: String = "") {
     Column {
         Row(Modifier.fillMaxWidth().height(76.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             player.hand.forEach { card ->
@@ -914,8 +907,24 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
                 }
             }
         }
-        OutlinedButton(onClick = onReplaceDeadCard, enabled = selectedCardId != null) { 
-            Text(text = "Replace selected dead card", fontSize = 12.sp) 
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onReplaceDeadCard, enabled = selectedCardId != null) { 
+                Text(text = "Replace selected dead card", fontSize = 11.sp) 
+            }
+            if (statusMessage.isNotEmpty()) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = statusMessage, 
+                    fontWeight = FontWeight.Bold, 
+                    color = player.team.uiColor, 
+                    fontSize = 12.sp, 
+                    lineHeight = 14.sp,
+                    maxLines = 1, 
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.End
+                )
+            }
         }
     }
 }
@@ -961,7 +970,7 @@ fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
 // 3. ONLINE MULTIPLAYER & CHAT SYSTEM
 // ==============================================================================
 
-data class ChatMessage(val sender: String = "", val team: String = "", val text: String = "", val isTeamOnly: Boolean = false, val timestamp: Long = 0L)
+data class ChatMessage(val sender: String = "", val team: String = "", val text: String = "", val teamOnly: Boolean = false, val timestamp: Long = 0L)
 
 data class FBCard(val suit: String = "", val rank: String = "", val id: Int = 0) {
     val isTwoEyedJack: Boolean get() = rank == "J" && (suit == "♦" || suit == "♣")
@@ -997,18 +1006,6 @@ data class GameRoom(
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
 
-@Composable
-fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
-    when (viewModel.currentAppState) {
-        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
-        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
-        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
-    }
-}
-
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
     var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
@@ -1028,7 +1025,7 @@ class MultiplayerViewModel : ViewModel() {
     fun getRelevantMessageCount(): Int {
         val room = _roomData.value
         val myTeam = room.players.firstOrNull { it.playerName == playerName }?.team ?: "Team1"
-        return room.chatMessages.values.count { !it.isTeamOnly || (it.isTeamOnly && it.team == myTeam) }
+        return room.chatMessages.values.count { !it.teamOnly || (it.teamOnly && it.team == myTeam) }
     }
 
     fun backToLobby() {
@@ -1088,7 +1085,7 @@ class MultiplayerViewModel : ViewModel() {
         if (text.isBlank() || roomCode.isEmpty()) return
         val room = _roomData.value
         val myTeam = room.players.firstOrNull { it.playerName == playerName }?.team ?: "Team1"
-        val msg = ChatMessage(sender = playerName, team = myTeam, text = text, isTeamOnly = isTeamOnly, timestamp = System.currentTimeMillis())
+        val msg = ChatMessage(sender = playerName, team = myTeam, text = text, teamOnly = isTeamOnly, timestamp = System.currentTimeMillis())
         db.child("rooms").child(roomCode).child("chatMessages").push().setValue(msg)
     }
 
@@ -1696,7 +1693,7 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
     val listState = rememberLazyListState()
 
     val filteredMessages = room.chatMessages.values.sortedBy { it.timestamp }.filter { 
-        !it.isTeamOnly || (it.isTeamOnly && it.team == myTeam)
+        !it.teamOnly || (it.teamOnly && it.team == myTeam)
     }
 
     LaunchedEffect(filteredMessages.size) {
@@ -1734,10 +1731,10 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
                 LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth().border(1.dp, Color.LightGray).padding(8.dp)) {
                     items(filteredMessages) { msg ->
                         val isMe = msg.sender == vm.playerName
-                        val msgColor = if (msg.isTeamOnly) Color(room.teamColors[msg.team] ?: TEAM_COLORS[0]) else Color.DarkGray
+                        val msgColor = if (msg.teamOnly) Color(room.teamColors[msg.team] ?: TEAM_COLORS[0]) else Color.DarkGray
                         val align = if (isMe) Alignment.End else Alignment.Start
                         val bg = if (isMe) Color(0xFFE3F2FD) else Color(0xFFF5F5F5)
-                        val prefix = if (msg.isTeamOnly) "[TEAM] " else "[ALL] "
+                        val prefix = if (msg.teamOnly) "[TEAM] " else "[ALL] "
                         
                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = align) {
                             Text(text = if (isMe) "You" else msg.sender, fontSize = 10.sp, color = Color.Gray)
@@ -1770,6 +1767,18 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
 // ==============================================================================
 // ONLINE SCREENS
 // ==============================================================================
+@Composable
+fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
+    when (viewModel.currentAppState) {
+        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
+    }
+}
+
 @Composable
 fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -2075,15 +2084,12 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
-            // New Clean Top Bar Layout
+            // New Clean Top Bar Layout (Message logic moved to bottom)
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                // Left side: Messages
+                // Left side: Room Info
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
                     val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
-                    Text(text = rInfo, fontSize = 10.sp, color = Color.Gray)
+                    Text(text = rInfo, fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
                 }
                 
                 // Center: Time and Turn Timer Display
@@ -2252,8 +2258,24 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                         }
                     }
                 }
-                OutlinedButton(onClick = { selectedCard?.let { vm.replaceDeadCard(it) }; selectedCard = null }, enabled = selectedCard != null && isMyTurn) { 
-                    Text(text = "Replace selected dead card", fontSize = 12.sp) 
+                
+                // Status Message moved next to Replace Card button
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { selectedCard?.let { vm.replaceDeadCard(it) }; selectedCard = null }, enabled = selectedCard != null && isMyTurn) { 
+                        Text(text = "Replace selected dead card", fontSize = 11.sp) 
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = room.message, 
+                        fontWeight = FontWeight.Bold, 
+                        color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, 
+                        fontSize = 12.sp, 
+                        lineHeight = 14.sp,
+                        maxLines = 1, 
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.End
+                    )
                 }
             }
         }

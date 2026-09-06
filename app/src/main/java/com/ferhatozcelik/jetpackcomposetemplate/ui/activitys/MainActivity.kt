@@ -429,16 +429,16 @@ class GameViewModel : ViewModel() {
         updatePlayer(movingPlayer.copy(hand = newHand))
         _selectedCardId.value = null
         
-        var turnSummary = when { 
-            cardUsed.isOneEyedJack -> "Player ${movingPlayer.id} used a Remove Jack."
-            cardUsed.isTwoEyedJack -> "Player ${movingPlayer.id} used a Wild Jack."
-            else -> "Player ${movingPlayer.id} placed ${cardUsed.rank.text}${cardUsed.suit.symbol}." 
+        val turnSummary = when { 
+            cardUsed.isOneEyedJack -> "Player ${movingPlayer.id} used a Remove Jack,"
+            cardUsed.isTwoEyedJack -> "Player ${movingPlayer.id} used a Wild Jack,"
+            else -> "Player ${movingPlayer.id} placed ${cardUsed.rank.text}${cardUsed.suit.symbol}," 
         }
         
         if (!cardUsed.isOneEyedJack) {
             val seqResult = updateSequencesAndCheckWinner(movingPlayer.team)
             if (seqResult == 1) {
-                turnSummary += " Sequence completed!" 
+                // Sequence completed check
             } else if (seqResult == 2) { 
                 gameMessage = "$turnSummary Team ${movingPlayer.team.name} wins!"
                 return 
@@ -469,8 +469,8 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
         clearHighlights()
         
-        val msg = "Player ${currentPlayer.id} replaced a dead card."
-        gameMessage = "$msg Player ${currentPlayer.id}'s turn."
+        val msg = "Player ${currentPlayer.id} replaced a dead card,"
+        advanceTurn(msg)
         checkForDraw()
     }
     
@@ -560,7 +560,7 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
         clearHighlights()
         
-        val p = if (prefix.isNotEmpty()) "$prefix " else ""
+        val p = if (prefix.isNotEmpty()) "$prefix now " else ""
         if (currentPlayer.isCpu) { 
             currentGameState = GameState.PLAYING
             gameMessage = "${p}CPU ${currentPlayer.id} is thinking..."
@@ -607,13 +607,13 @@ class GameViewModel : ViewModel() {
                 val newHand = cpu.hand.filterNot { it.uniqueId == deadCard.uniqueId }.toMutableList()
                 drawOneCard()?.let(newHand::add)
                 updatePlayer(cpu.copy(hand = newHand))
-                val msg = "CPU ${cpu.id} replaced a dead card."
+                val msg = "CPU ${cpu.id} replaced a dead card,"
                 if (!checkForDraw(msg)) { 
-                    gameMessage = "$msg CPU ${cpu.id} is thinking..."
+                    gameMessage = "$msg now CPU ${cpu.id} is thinking..."
                     startCpuTurn() 
                 }
             } else if (!checkForDraw()) {
-                advanceTurn("CPU ${cpu.id} has no legal move.")
+                advanceTurn("CPU ${cpu.id} has no legal move,")
             }
         }
     }
@@ -1297,7 +1297,7 @@ class MultiplayerViewModel : ViewModel() {
             "deck" to currentDeck, 
             "players" to updatedPlayers,
             "turnPlayerId" to firstPlayerId, 
-            "message" to "Game started! $firstPlayerName's turn.",
+            "message" to "Game started! now $firstPlayerName's turn",
             "matchStartTime" to System.currentTimeMillis(),
             "lastPlayedCard" to null,
             "currentTurnStartTime" to System.currentTimeMillis()
@@ -1366,7 +1366,7 @@ class MultiplayerViewModel : ViewModel() {
             "board" to buildInitialBoard(), 
             "players" to updatedPlayers,
             "turnPlayerId" to firstTurnPlayerId, 
-            "message" to "Match ${room.matchNumber+1} started! $firstPlayerName's turn.",
+            "message" to "Match ${room.matchNumber+1} started! now $firstPlayerName's turn",
             "matchStartTime" to System.currentTimeMillis(), 
             "rematchVotes" to emptyMap<String, Boolean>(),
             "lastMoveRow" to -1, 
@@ -1428,7 +1428,7 @@ class MultiplayerViewModel : ViewModel() {
                 val nextPlayerName = room.players.firstOrNull { it.playerId == nextTurnId }?.playerName ?: "Player $nextTurnId"
                 db.child("rooms").child(roomCode).updateChildren(mapOf(
                     "turnPlayerId" to nextTurnId, 
-                    "message" to "CPU (${cpuPlayer.playerName}) had no moves. $nextPlayerName's turn.",
+                    "message" to "CPU (${cpuPlayer.playerName}) had no moves, now $nextPlayerName's turn",
                     "currentTurnStartTime" to System.currentTimeMillis()
                 ))
             }
@@ -1542,9 +1542,9 @@ class MultiplayerViewModel : ViewModel() {
 
         val prefix = if (isCpu) "CPU (${actingPlayer.playerName}) " else "${actingPlayer.playerName} "
         val actionMsg = when { 
-            card.isOneEyedJack -> "${prefix}used a Remove Jack."
-            card.isTwoEyedJack -> "${prefix}used a Wild Jack."
-            else -> "${prefix}placed a chip." 
+            card.isOneEyedJack -> "${prefix}used a Remove Jack"
+            card.isTwoEyedJack -> "${prefix}used a Wild Jack"
+            else -> "${prefix}placed a chip" 
         }
 
         // Extremely Targeted Database Updates To Prevent Network Collisions!
@@ -1564,7 +1564,6 @@ class MultiplayerViewModel : ViewModel() {
         updates["players/$pIndex/timePlayedMs"] = updatedPlayers[pIndex].timePlayedMs
         
         updates["turnPlayerId"] = nextTurnId
-        updates["message"] = actionMsg
         updates["lastMoveRow"] = row
         updates["lastMoveCol"] = col
         updates["lastPlayedCard"] = card
@@ -1587,12 +1586,14 @@ class MultiplayerViewModel : ViewModel() {
             val htStr = if(isHatTrick) " HAT-TRICK!" else ""
             
             updates["status"] = "FINISHED"
-            updates["message"] = "$actionMsg Team $winningTeam Wins!$htStr"
+            updates["message"] = "$actionMsg! Team $winningTeam Wins!$htStr"
             updates["winnerTeam"] = winningTeam
             updates["matchHistory"] = newHist
             updates["consecutiveWins"] = consec
             updates["lastWinningTeam"] = winningTeam
-        } 
+        } else {
+            updates["message"] = "$actionMsg, now $nextPlayerName's turn"
+        }
 
         db.child("rooms").child(roomCode).updateChildren(updates)
     }
@@ -1626,12 +1627,16 @@ class MultiplayerViewModel : ViewModel() {
         
         val pIndex = room.players.indexOfFirst { it.playerId == actingPlayer.playerId }
         val prefix = if (isCpu) "CPU (${actingPlayer.playerName}) " else "${actingPlayer.playerName} "
+        
+        val nextTurnId = if (room.turnPlayerId >= room.players.size) 1 else room.turnPlayerId + 1
+        val nextPlayerName = room.players.firstOrNull { it.playerId == nextTurnId }?.playerName ?: "Player $nextTurnId"
 
         val updates = mutableMapOf<String, Any?>()
         updates["players/$pIndex/hand"] = updatedHand
         updates["players/$pIndex/timePlayedMs"] = actingPlayer.timePlayedMs + timeTaken
         updates["deck"] = deckList
-        updates["message"] = "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn."
+        updates["message"] = "${prefix}replaced a dead card, now $nextPlayerName's turn"
+        updates["turnPlayerId"] = nextTurnId
         updates["lastPlayedCard"] = card
         updates["currentTurnStartTime"] = System.currentTimeMillis()
         
@@ -1767,18 +1772,6 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
 // ==============================================================================
 // ONLINE SCREENS
 // ==============================================================================
-@Composable
-fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
-    when (viewModel.currentAppState) {
-        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
-        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
-        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
-    }
-}
-
 @Composable
 fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

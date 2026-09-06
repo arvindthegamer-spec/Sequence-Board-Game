@@ -17,6 +17,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -482,7 +485,7 @@ class GameViewModel : ViewModel() {
         for (row in 0 until 10) { 
             for (col in 0 until 10) { 
                 for ((dr, dc) in directions) {
-                    val positions = (0 until 5).map { offset -> row + dr * offset to col + dc * offset }
+                    val positions = (0 until 5).map { offset -> row + offset * dr to col + offset * dc }
                     if (positions.any { (r, c) -> r !in 0..9 || c !in 0..9 }) continue
                     
                     if (positions.all { (r, c) -> 
@@ -993,6 +996,18 @@ data class GameRoom(
 )
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
+
+@Composable
+fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
+    when (viewModel.currentAppState) {
+        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
+    }
+}
 
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
@@ -2438,7 +2453,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                                             }
                                         }
                                     }
-                                    TextButton(onClick = { vm.forceSync() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
+                                    TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
                                 }
                                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                                     TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }

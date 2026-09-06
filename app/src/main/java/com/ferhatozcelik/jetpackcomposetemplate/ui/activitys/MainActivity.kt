@@ -17,9 +17,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -484,7 +482,7 @@ class GameViewModel : ViewModel() {
         for (row in 0 until 10) { 
             for (col in 0 until 10) { 
                 for ((dr, dc) in directions) {
-                    val positions = (0 until 5).map { offset -> row + offset * dr to col + offset * dc }
+                    val positions = (0 until 5).map { offset -> row + dr * offset to col + dc * offset }
                     if (positions.any { (r, c) -> r !in 0..9 || c !in 0..9 }) continue
                     
                     if (positions.all { (r, c) -> 
@@ -761,14 +759,15 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     val player = gameViewModel.currentPlayer
     
     Column(Modifier.fillMaxSize().background(Color(0xFFF1F3F4)).padding(5.dp)) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 3.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(40.dp).padding(bottom = 3.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { 
                 Text(
                     text = gameViewModel.gameMessage, 
-                    fontSize = 15.sp, 
+                    fontSize = 13.sp, 
                     fontWeight = FontWeight.Bold, 
                     color = player.team.uiColor, 
-                    maxLines = 2
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 ) 
             }
             Row(verticalAlignment = Alignment.CenterVertically) { 
@@ -777,35 +776,38 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
                 val seqStr = "$currentSeq/$targetSeq"
                 Text(
                     text = seqStr, 
-                    fontSize = 18.sp, 
+                    fontSize = 16.sp, 
                     fontWeight = FontWeight.Bold, 
                     color = player.team.uiColor, 
                     modifier = Modifier.padding(end = 8.dp)
                 )
-                TextButton(onClick = onExit) { 
-                    Text(text = "Exit", color = Color.Red) 
+                TextButton(onClick = onExit, contentPadding = PaddingValues(2.dp)) { 
+                    Text(text = "Exit", fontSize = 12.sp, color = Color.Red) 
                 } 
             }
         }
         
         if (board.isNotEmpty()) { 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(10), 
-                modifier = Modifier.fillMaxWidth().weight(1f), 
-                userScrollEnabled = false, 
-                horizontalArrangement = Arrangement.spacedBy(1.dp), 
-                verticalArrangement = Arrangement.spacedBy(1.dp)
-            ) { 
-                items(board.flatten(), key = { it.row * 10 + it.col }) { space -> 
-                    BoardCard(space) { gameViewModel.humanPlaceToken(space.row, space.col) } 
-                } 
-            } 
+            // Fully dynamic grid replacement for offline board to prevent scrolling
+            Column(Modifier.weight(1f).fillMaxWidth()) {
+                board.forEach { rowSpaces ->
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        rowSpaces.forEach { space ->
+                            BoardCard(
+                                space = space, 
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                onClick = { gameViewModel.humanPlaceToken(space.row, space.col) }
+                            )
+                        }
+                    }
+                }
+            }
         }
         
         Spacer(Modifier.height(4.dp))
         if (!player.isCpu) { 
             val hintString = if (selectedCardId == null) "Select a card to show legal moves" else "Green spaces are legal moves"
-            Text(text = hintString, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23))
+            Text(text = hintString, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23))
             PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard) 
         } else { 
             Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { 
@@ -816,7 +818,7 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
 }
 
 @Composable
-private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
+private fun BoardCard(space: BoardSpace, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val bgBrush = when { 
         space.card.rank == Rank.CORNER -> Brush.linearGradient(listOf(Color(0xFFFFE082), Color(0xFFFFCA28)))
         space.isHighlighted -> Brush.linearGradient(listOf(Color(0xFFA5D6A7), Color(0xFF81C784)))
@@ -831,9 +833,7 @@ private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
     }
     
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.68f)
+        modifier = modifier
             .padding(1.dp)
             .shadow(2.dp, MaterialTheme.shapes.extraSmall)
             .background(bgBrush, MaterialTheme.shapes.extraSmall)
@@ -842,14 +842,14 @@ private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
     ) {
         if (space.card.rank == Rank.CORNER) { 
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) { 
-                Text(text = "★", fontSize = 12.sp, color = Color(0xFF6D4C00))
+                Text(text = "★", fontSize = 10.sp, color = Color(0xFF6D4C00))
                 Text(text = "FREE", fontSize = 6.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6D4C00)) 
             } 
         }
         else { 
             Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) { 
-                Text(text = space.card.rank.text, fontSize = 10.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, color = space.card.suit.color)
-                Text(text = space.card.suit.symbol, fontSize = 9.sp, lineHeight = 9.sp, color = space.card.suit.color) 
+                Text(text = space.card.rank.text, fontSize = 9.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold, color = space.card.suit.color)
+                Text(text = space.card.suit.symbol, fontSize = 8.sp, lineHeight = 8.sp, color = space.card.suit.color) 
             } 
         }
         
@@ -876,7 +876,7 @@ private fun BoardCard(space: BoardSpace, onClick: () -> Unit) {
                     )
             ) { 
                 if (space.isCompletedSequence) { 
-                    Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White) 
+                    Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.White) 
                 } 
             } 
         }
@@ -994,19 +994,6 @@ data class GameRoom(
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
 
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
-    when (viewModel.currentAppState) {
-        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
-        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
-        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
-    }
-}
-
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
     var currentAppState by mutableStateOf(OnlineAppState.LOBBY)
@@ -1043,6 +1030,16 @@ class MultiplayerViewModel : ViewModel() {
             val currentRoom = _roomData.value
             if (currentRoom.originalHostName == playerName && currentRoom.hostName != playerName) {
                 db.child("rooms").child(roomCode).child("hostName").setValue(playerName)
+            }
+        }
+    }
+    
+    fun forceSync() {
+        syncPresence()
+        db.child("rooms").child(roomCode).get().addOnSuccessListener { snapshot ->
+            val room = snapshot.getValue(GameRoom::class.java)
+            if (room != null) {
+                _roomData.value = room
             }
         }
     }
@@ -1538,6 +1535,33 @@ class MultiplayerViewModel : ViewModel() {
             else -> "${prefix}placed a chip." 
         }
 
+        // Extremely Targeted Database Updates To Prevent Network Collisions!
+        val updates = mutableMapOf<String, Any?>()
+        updates["board/${targetIndex}"] = updatedBoard[targetIndex]
+        
+        for (i in updatedBoard.indices) {
+            if (room.board[i].completedSequence != updatedBoard[i].completedSequence) {
+                updates["board/$i/completedSequence"] = updatedBoard[i].completedSequence
+            }
+        }
+        
+        val pIndex = room.players.indexOfFirst { it.playerId == actingPlayer.playerId }
+        updates["players/$pIndex/hand"] = updatedHand
+        updates["players/$pIndex/wildUsed"] = updatedPlayers[pIndex].wildUsed
+        updates["players/$pIndex/removeUsed"] = updatedPlayers[pIndex].removeUsed
+        updates["players/$pIndex/timePlayedMs"] = updatedPlayers[pIndex].timePlayedMs
+        
+        updates["turnPlayerId"] = nextTurnId
+        updates["message"] = actionMsg
+        updates["lastMoveRow"] = row
+        updates["lastMoveCol"] = col
+        updates["lastPlayedCard"] = card
+        updates["currentTurnStartTime"] = System.currentTimeMillis()
+        
+        if (deckList.size != room.deck.size) {
+            updates["deck"] = deckList
+        }
+
         if (winningTeam != null) {
             val totalMatchSecs = if (room.matchStartTime > 0) (System.currentTimeMillis() - room.matchStartTime) / 1000 else 0
             val mHr = totalMatchSecs / 3600
@@ -1550,34 +1574,15 @@ class MultiplayerViewModel : ViewModel() {
             val newHist = room.matchHistory.toMutableList().apply { add("Match ${room.matchNumber}: $winningTeam Won ($matchTimeStr)") }
             val htStr = if(isHatTrick) " HAT-TRICK!" else ""
             
-            _roomData.value = room.copy(
-                board = updatedBoard, players = updatedPlayers, status = "FINISHED", 
-                message = "$actionMsg Team $winningTeam Wins!$htStr", winnerTeam = winningTeam, 
-                lastMoveRow = row, lastMoveCol = col, matchHistory = newHist, 
-                consecutiveWins = consec, lastWinningTeam = winningTeam, lastPlayedCard = card
-            )
+            updates["status"] = "FINISHED"
+            updates["message"] = "$actionMsg Team $winningTeam Wins!$htStr"
+            updates["winnerTeam"] = winningTeam
+            updates["matchHistory"] = newHist
+            updates["consecutiveWins"] = consec
+            updates["lastWinningTeam"] = winningTeam
+        } 
 
-            val winUpdates = mapOf(
-                "board" to updatedBoard, "players" to updatedPlayers, "status" to "FINISHED", 
-                "message" to "$actionMsg Team $winningTeam Wins!$htStr", "winnerTeam" to winningTeam, 
-                "lastMoveRow" to row, "lastMoveCol" to col, "matchHistory" to newHist, 
-                "consecutiveWins" to consec, "lastWinningTeam" to winningTeam, "lastPlayedCard" to card
-            )
-            db.child("rooms").child(roomCode).updateChildren(winUpdates)
-        } else {
-            _roomData.value = room.copy(
-                board = updatedBoard, deck = deckList, players = updatedPlayers, 
-                turnPlayerId = nextTurnId, message = "$actionMsg $nextPlayerName's turn.", 
-                lastMoveRow = row, lastMoveCol = col, lastPlayedCard = card, currentTurnStartTime = System.currentTimeMillis()
-            )
-
-            val updates = mapOf(
-                "board" to updatedBoard, "deck" to deckList, "players" to updatedPlayers, 
-                "turnPlayerId" to nextTurnId, "message" to "$actionMsg $nextPlayerName's turn.", 
-                "lastMoveRow" to row, "lastMoveCol" to col, "lastPlayedCard" to card, "currentTurnStartTime" to System.currentTimeMillis()
-            )
-            db.child("rooms").child(roomCode).updateChildren(updates)
-        }
+        db.child("rooms").child(roomCode).updateChildren(updates)
     }
     
     fun replaceDeadCard(card: FBCard) {
@@ -1606,19 +1611,19 @@ class MultiplayerViewModel : ViewModel() {
 
         val currentMillis = System.currentTimeMillis()
         val timeTaken = if (isCpu) 1500L else if (room.currentTurnStartTime > 0L) currentMillis - room.currentTurnStartTime else 0L
-
-        val updatedPlayers = room.players.map { 
-            if (it.playerId == actingPlayer.playerId) it.copy(hand = updatedHand, timePlayedMs = it.timePlayedMs + timeTaken) else it 
-        }
+        
+        val pIndex = room.players.indexOfFirst { it.playerId == actingPlayer.playerId }
         val prefix = if (isCpu) "CPU (${actingPlayer.playerName}) " else "${actingPlayer.playerName} "
 
-        _roomData.value = room.copy(
-            deck = deckList, players = updatedPlayers, message = "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", lastPlayedCard = card, currentTurnStartTime = System.currentTimeMillis()
-        )
-
-        db.child("rooms").child(roomCode).updateChildren(
-            mapOf("deck" to deckList, "players" to updatedPlayers, "message" to "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn.", "lastPlayedCard" to card, "currentTurnStartTime" to System.currentTimeMillis())
-        )
+        val updates = mutableMapOf<String, Any?>()
+        updates["players/$pIndex/hand"] = updatedHand
+        updates["players/$pIndex/timePlayedMs"] = actingPlayer.timePlayedMs + timeTaken
+        updates["deck"] = deckList
+        updates["message"] = "${prefix}replaced a dead card. ${actingPlayer.playerName}'s turn."
+        updates["lastPlayedCard"] = card
+        updates["currentTurnStartTime"] = System.currentTimeMillis()
+        
+        db.child("rooms").child(roomCode).updateChildren(updates)
     }
 
     private fun buildDeck(): List<FBCard> {
@@ -1717,11 +1722,12 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
                         val msgColor = if (msg.isTeamOnly) Color(room.teamColors[msg.team] ?: TEAM_COLORS[0]) else Color.DarkGray
                         val align = if (isMe) Alignment.End else Alignment.Start
                         val bg = if (isMe) Color(0xFFE3F2FD) else Color(0xFFF5F5F5)
+                        val prefix = if (msg.isTeamOnly) "[TEAM] " else "[ALL] "
                         
                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = align) {
                             Text(text = if (isMe) "You" else msg.sender, fontSize = 10.sp, color = Color.Gray)
                             Box(modifier = Modifier.background(bg, MaterialTheme.shapes.small).padding(8.dp)) {
-                                Text(text = msg.text, fontSize = 14.sp, color = msgColor)
+                                Text(text = prefix + msg.text, fontSize = 14.sp, color = msgColor)
                             }
                         }
                     }
@@ -1924,7 +1930,7 @@ fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
+            TextButton(onClick = { vm.forceSync() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
         }
         if (isHost) { 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1986,13 +1992,18 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 turnTimeRemaining = (room.timerDurationSecs - elapsed).toInt().coerceAtLeast(0)
                 
                 if (turnTimeRemaining <= 0) {
-                    if (isMyTurn) {
-                        vm.triggerCpuTurn(room.turnPlayerId)
-                        break
-                    } else if (vm.playerName == room.hostName) {
-                        if (elapsed >= room.timerDurationSecs + 2) {
+                    val currentTurnPlayer = room.players.firstOrNull { it.playerId == room.turnPlayerId }
+                    val isCurrentOnline = currentTurnPlayer != null && room.presence[currentTurnPlayer.playerName] == true
+                    
+                    if (isCurrentOnline) {
+                        if (isMyTurn) {
                             vm.triggerCpuTurn(room.turnPlayerId)
                             break
+                        } else if (vm.playerName == room.hostName) {
+                            if (elapsed >= room.timerDurationSecs + 2) {
+                                vm.triggerCpuTurn(room.turnPlayerId)
+                                break
+                            }
                         }
                     }
                 }
@@ -2054,7 +2065,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 // Left side: Messages
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp)
+                        Text(text = room.message, fontWeight = FontWeight.Bold, color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     val rInfo = "Room: ${room.roomId} | You: ${vm.playerName}"
                     Text(text = rInfo, fontSize = 10.sp, color = Color.Gray)
@@ -2089,58 +2100,65 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                             }
                         }
                     }
-                    TextButton(onClick = { vm.syncPresence() }, contentPadding = PaddingValues(2.dp)) { Text(text = "Sync", fontSize=12.sp) }
+                    TextButton(onClick = { vm.forceSync() }, contentPadding = PaddingValues(2.dp)) { Text(text = "Sync", fontSize=12.sp) }
                     TextButton(onClick = { vm.backToLobby(); onExit() }, contentPadding = PaddingValues(2.dp)) { Text(text = "Exit", fontSize=12.sp, color = Color.Red) }
                 }
             }
 
             if (room.board.isNotEmpty()) {
-                LazyVerticalGrid(columns = GridCells.Fixed(10), modifier = Modifier.weight(1f)) {
-                    items(room.board) { space ->
-                        val isTwoEyed = selectedCard?.isTwoEyedJack == true
-                        val isOneEyed = selectedCard?.isOneEyedJack == true
-                        val myTeam = myPlayer?.team ?: "Team1"
-                        val isLegalMove = selectedCard != null && space.card.rank != "★" && when { 
-                            isTwoEyed -> space.occupant == "NONE"
-                            isOneEyed -> space.occupant != "NONE" && space.occupant != myTeam && !space.isCompletedSequence
-                            else -> space.occupant == "NONE" && space.card.matches(selectedCard!!) 
-                        }
-                        val isLastMove = space.r == room.lastMoveRow && space.c == room.lastMoveCol
-                        
-                        val bgBrush = when { 
-                            space.card.rank == "★" -> Brush.linearGradient(listOf(Color(0xFFFFE082), Color(0xFFFFCA28)))
-                            isLegalMove -> Brush.linearGradient(listOf(Color(0xFFA5D6A7), Color(0xFF81C784)))
-                            isLastMove -> Brush.linearGradient(listOf(Color(0xFFFFF59D), Color(0xFFFFF176)))
-                            space.isCompletedSequence -> Brush.linearGradient(listOf(Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha=0.15f), Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha=0.3f)))
-                            else -> Brush.linearGradient(listOf(Color.White, Color(0xFFF3F3F3)))
-                        }
+                // Fully dynamic structural grid to entirely prevent scrolling on smaller phones
+                Column(Modifier.weight(1f).fillMaxWidth()) {
+                    for (r in 0..9) {
+                        Row(Modifier.weight(1f).fillMaxWidth()) {
+                            for (c in 0..9) {
+                                val space = room.board.getOrNull(r * 10 + c)
+                                if (space != null) {
+                                    val isTwoEyed = selectedCard?.isTwoEyedJack == true
+                                    val isOneEyed = selectedCard?.isOneEyedJack == true
+                                    val myTeam = myPlayer?.team ?: "Team1"
+                                    val isLegalMove = selectedCard != null && space.card.rank != "★" && when { 
+                                        isTwoEyed -> space.occupant == "NONE"
+                                        isOneEyed -> space.occupant != "NONE" && space.occupant != myTeam && !space.isCompletedSequence
+                                        else -> space.occupant == "NONE" && space.card.matches(selectedCard!!) 
+                                    }
+                                    val isLastMove = space.r == room.lastMoveRow && space.c == room.lastMoveCol
+                                    
+                                    val bgBrush = when { 
+                                        space.card.rank == "★" -> Brush.linearGradient(listOf(Color(0xFFFFE082), Color(0xFFFFCA28)))
+                                        isLegalMove -> Brush.linearGradient(listOf(Color(0xFFA5D6A7), Color(0xFF81C784)))
+                                        isLastMove -> Brush.linearGradient(listOf(Color(0xFFFFF59D), Color(0xFFFFF176)))
+                                        space.isCompletedSequence -> Brush.linearGradient(listOf(Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha=0.15f), Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0]).copy(alpha=0.3f)))
+                                        else -> Brush.linearGradient(listOf(Color.White, Color(0xFFF3F3F3)))
+                                    }
 
-                        Box(modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(0.74f)
-                            .padding(1.dp)
-                            .shadow(2.dp, MaterialTheme.shapes.extraSmall)
-                            .background(bgBrush, MaterialTheme.shapes.extraSmall)
-                            .border(if (isLegalMove || space.isCompletedSequence || isLastMove) 2.dp else 0.5.dp, when { isLegalMove -> Color(0xFF07852B); isLastMove -> Color(0xFFFF9800); else -> Color.LightGray }, MaterialTheme.shapes.extraSmall)
-                            .clickable(enabled = isLegalMove && isMyTurn) { vm.playCard(selectedCard!!, space.r, space.c); selectedCard = null }) {
-                            
-                            Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = space.card.rank, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
-                                Text(text = space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
-                            }
-                            if (space.occupant != "NONE") {
-                                val chipAlpha = if (space.isCompletedSequence) 0.62f else 0.9f
-                                val chipBaseColor = Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0])
-                                val cColor1 = chipBaseColor.copy(alpha = chipAlpha)
-                                val cColor2 = chipBaseColor.copy(alpha = (chipAlpha - 0.2f).coerceAtLeast(0.1f))
-                                val chipBrush = Brush.radialGradient(listOf(cColor2, cColor1))
-                                
-                                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f)
-                                    .shadow(2.dp, CircleShape)
-                                    .clip(CircleShape)
-                                    .background(chipBrush)
-                                    .border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) {
-                                    if (space.isCompletedSequence) Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Box(modifier = Modifier
+                                        .weight(1f).fillMaxHeight()
+                                        .padding(1.dp)
+                                        .shadow(2.dp, MaterialTheme.shapes.extraSmall)
+                                        .background(bgBrush, MaterialTheme.shapes.extraSmall)
+                                        .border(if (isLegalMove || space.isCompletedSequence || isLastMove) 2.dp else 0.5.dp, when { isLegalMove -> Color(0xFF07852B); isLastMove -> Color(0xFFFF9800); else -> Color.LightGray }, MaterialTheme.shapes.extraSmall)
+                                        .clickable(enabled = isLegalMove && isMyTurn) { vm.playCard(selectedCard!!, space.r, space.c); selectedCard = null }) {
+                                        
+                                        Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(text = space.card.rank, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
+                                            Text(text = space.card.suit, fontSize = 9.sp, color = if (space.card.suit == "♥" || space.card.suit == "♦") Color.Red else Color.Black)
+                                        }
+                                        if (space.occupant != "NONE") {
+                                            val chipAlpha = if (space.isCompletedSequence) 0.62f else 0.9f
+                                            val chipBaseColor = Color(room.teamColors[space.occupant] ?: TEAM_COLORS[0])
+                                            val cColor1 = chipBaseColor.copy(alpha = chipAlpha)
+                                            val cColor2 = chipBaseColor.copy(alpha = (chipAlpha - 0.2f).coerceAtLeast(0.1f))
+                                            val chipBrush = Brush.radialGradient(listOf(cColor2, cColor1))
+                                            
+                                            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f)
+                                                .shadow(2.dp, CircleShape)
+                                                .clip(CircleShape)
+                                                .background(chipBrush)
+                                                .border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) {
+                                                if (space.isCompletedSequence) Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2420,7 +2438,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                                             }
                                         }
                                     }
-                                    TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
+                                    TextButton(onClick = { vm.forceSync() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
                                 }
                                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                                     TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }

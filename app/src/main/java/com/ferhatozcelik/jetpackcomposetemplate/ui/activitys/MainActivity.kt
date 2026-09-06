@@ -17,6 +17,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -147,13 +150,23 @@ fun MainMenuScreen(onPlayLocal: () -> Unit, onPlayOnline: () -> Unit, onHistory:
     ) {
         Text(text = "SEQUENCE", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
         Text(text = "Board Game", fontSize = 20.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 32.dp))
-        Button(onClick = onPlayLocal, modifier = Modifier.fillMaxWidth(0.7f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { Text(text = "Play Local (Pass & Play / CPU)", fontSize = 16.sp) }
+        
+        Button(onClick = onPlayLocal, modifier = Modifier.fillMaxWidth(0.7f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
+            Text(text = "Play Local (Pass & Play / CPU)", fontSize = 16.sp) 
+        }
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onPlayOnline, modifier = Modifier.fillMaxWidth(0.7f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))) { Text(text = "Play Online (With Friends)", fontSize = 16.sp) }
+        Button(onClick = onPlayOnline, modifier = Modifier.fillMaxWidth(0.7f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))) { 
+            Text(text = "Play Online (With Friends)", fontSize = 16.sp) 
+        }
         Spacer(modifier = Modifier.height(16.dp))
-        OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth(0.7f).height(48.dp)) { Text(text = "View Match History", fontSize = 16.sp, color = Color.DarkGray) }
+        OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth(0.7f).height(48.dp)) { 
+            Text(text = "View Match History", fontSize = 16.sp, color = Color.DarkGray) 
+        }
         Spacer(modifier = Modifier.height(16.dp))
-        TextButton(onClick = onInstructions) { Text(text = "How to Play / Tutorial", fontSize = 16.sp, color = Color(0xFFE65100), fontWeight = FontWeight.Bold) }
+        TextButton(onClick = onInstructions) { 
+            Text(text = "How to Play / Tutorial", fontSize = 16.sp, color = Color(0xFFE65100), fontWeight = FontWeight.Bold) 
+        }
+        
         Spacer(modifier = Modifier.height(48.dp))
         Text(text = "Developed by Aravind Valluri", fontSize = 15.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium)
     }
@@ -167,18 +180,24 @@ fun InstructionsScreen(onExit: () -> Unit) {
             TextButton(onClick = onExit) { Text(text = "Back", color = Color.Red) }
         }
         Divider(color = Color.LightGray, thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+        
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
             item {
                 Text(text = "Objective", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF07852B))
                 Text(text = "Be the first team to complete the required number of Sequences (5 chips in a row). 2-Team games require 2 Sequences. 3-Team games require 1 Sequence.", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+                
                 Text(text = "The Cards & Board", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF07852B))
                 Text(text = "• The board contains two of every card in a standard deck (except Jacks).\n• The 4 Corners (★) are free spaces. Any team can use them to complete a 5-chip line.\n• When it's your turn, select a card from your hand, then tap the matching highlighted space on the board to place your chip.", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+                
                 Text(text = "The Jacks (Special Powers)", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Red)
                 Text(text = "• WILD (Two-Eyed Jacks - ♦ / ♣): These allow you to place your chip on ANY empty space on the board.\n• REMOVE (One-Eyed Jacks - ♠ / ♥): These allow you to remove an opponent's chip from the board (unless it is locked in a completed sequence).", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+
                 Text(text = "Dead Cards", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF07852B))
                 Text(text = "If you hold a card in your hand but both matching spaces on the board are already occupied, it is a 'Dead Card'. Select it and tap 'Replace selected dead card' to draw a new one and end your turn.", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+                
                 Text(text = "Online Play & Lobby Navigation", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1976D2))
                 Text(text = "• Host a room and share the 4-digit code. Wait for everyone to join before assigning teams.\n• The Host can dynamically change the number of teams (2 or 3) and assign players to specific teams.\n• The Host can turn on a Turn Timer (15s, 30s, 60s). If a player's timer runs out, the CPU will automatically take their turn for them so the game doesn't stall.", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+
                 Text(text = "In-Game Chat", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1976D2))
                 Text(text = "You can chat with players in the lobby, during the game, and on the scorecard! Use the toggle switch in the chat window to switch between sending messages to ALL players, or sending private messages only to your TEAM.", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
             }
@@ -194,17 +213,28 @@ fun HistoryScreen(onExit: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Match History", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-            TextButton(onClick = onExit) { Text(text = "Back", color = Color.Red) }
+            TextButton(onClick = onExit) { 
+                Text(text = "Back", color = Color.Red) 
+            }
         }
         Spacer(Modifier.height(16.dp))
         
         if (historyItems.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text = "No match history found.", color = Color.Gray) }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(text = "No match history found.", color = Color.Gray)
+            }
         } else {
             val grouped = historyItems.map { it.split("|") }.groupBy { it.getOrNull(1) ?: "Unknown Session" }
             LazyColumn(Modifier.fillMaxSize()) {
                 grouped.forEach { (sessionKey, matches) ->
-                    item { Text(text = sessionKey, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).background(Color(0xFFE3F2FD)).fillMaxWidth().padding(8.dp)) }
+                    item {
+                        Text(
+                            text = sessionKey, 
+                            fontWeight = FontWeight.Bold, 
+                            fontSize = 15.sp, 
+                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).background(Color(0xFFE3F2FD)).fillMaxWidth().padding(8.dp)
+                        )
+                    }
                     item {
                         Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(8.dp)) {
                             Text(text = "Match", Modifier.weight(0.3f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -216,6 +246,7 @@ fun HistoryScreen(onExit: () -> Unit) {
                         val mNum = matchData.getOrNull(2) ?: ""
                         val winner = matchData.getOrNull(3) ?: ""
                         val time = matchData.getOrNull(4) ?: ""
+                        
                         Row(Modifier.fillMaxWidth().padding(8.dp)) {
                             Text(text = mNum, Modifier.weight(0.3f), fontSize = 14.sp)
                             Text(text = winner, Modifier.weight(0.4f), fontSize = 14.sp, color = Color(0xFF07852B), fontWeight = FontWeight.Bold)
@@ -234,19 +265,27 @@ fun HistoryScreen(onExit: () -> Unit) {
 // ==============================================================================
 enum class Suit(val symbol: String, val color: Color) { 
     SPADES("♠", Color.Black), HEARTS("♥", Color(0xFFC62828)), 
-    DIAMONDS("♦", Color(0xFFC62828)), CLUBS("♣", Color.Black), NONE("", Color.Transparent) 
+    DIAMONDS("♦", Color(0xFFC62828)), CLUBS("♣", Color.Black), 
+    NONE("", Color.Transparent) 
 }
+
 enum class Rank(val text: String) { 
     A("A"), K("K"), Q("Q"), J("J"), TEN("10"), NINE("9"), 
-    EIGHT("8"), SEVEN("7"), SIX("6"), FIVE("5"), FOUR("4"), THREE("3"), TWO("2"), CORNER("★") 
+    EIGHT("8"), SEVEN("7"), SIX("6"), FIVE("5"), FOUR("4"), 
+    THREE("3"), TWO("2"), CORNER("★") 
 }
-enum class TeamColor(val uiColor: Color) { NONE(Color.Transparent), BLUE(Color(0xFF1976D2)), GREEN(Color(0xFF159447)), RED(Color(0xFFD32F2F)) }
+
+enum class TeamColor(val uiColor: Color) { 
+    NONE(Color.Transparent), BLUE(Color(0xFF1976D2)), 
+    GREEN(Color(0xFF159447)), RED(Color(0xFFD32F2F)) 
+}
 
 data class PlayingCard(val suit: Suit, val rank: Rank, val uniqueId: Int) { 
     fun isTwoEyedJack(): Boolean = rank == Rank.J && (suit == Suit.DIAMONDS || suit == Suit.CLUBS)
     fun isOneEyedJack(): Boolean = rank == Rank.J && (suit == Suit.SPADES || suit == Suit.HEARTS)
     fun matches(other: PlayingCard): Boolean = suit == other.suit && rank == other.rank 
 }
+
 data class Player(val id: Int, val team: TeamColor, val isCpu: Boolean, val hand: List<PlayingCard> = emptyList())
 data class BoardSpace(val row: Int, val col: Int, val card: PlayingCard, val occupant: TeamColor = TeamColor.NONE, val isHighlighted: Boolean = false, val isCompletedSequence: Boolean = false)
 data class CompletedLine(val team: TeamColor, val positions: Set<Pair<Int, Int>>)
@@ -258,13 +297,20 @@ class GameViewModel : ViewModel() {
     private var players: List<Player> = emptyList()
     private var cpuJob: Job? = null
 
-    var currentPlayerIndex by mutableStateOf(0); private set
-    var currentGameState by mutableStateOf(GameState.SETUP); private set
-    var gameMessage by mutableStateOf("Choose game settings."); private set
-    var humanCount by mutableStateOf(1); private set
-    var numberOfTeams by mutableStateOf(2); private set
-    var winnerTeam by mutableStateOf<TeamColor?>(null); private set
-    var isDraw by mutableStateOf(false); private set
+    var currentPlayerIndex by mutableStateOf(0) 
+        private set
+    var currentGameState by mutableStateOf(GameState.SETUP) 
+        private set
+    var gameMessage by mutableStateOf("Choose game settings.") 
+        private set
+    var humanCount by mutableStateOf(1) 
+        private set
+    var numberOfTeams by mutableStateOf(2) 
+        private set
+    var winnerTeam by mutableStateOf<TeamColor?>(null) 
+        private set
+    var isDraw by mutableStateOf(false) 
+        private set
 
     private val _board = MutableStateFlow<List<List<BoardSpace>>>(emptyList())
     val board: StateFlow<List<List<BoardSpace>>> = _board.asStateFlow()
@@ -298,20 +344,36 @@ class GameViewModel : ViewModel() {
         
         deck = buildTwoDecks().shuffled(random).toMutableList()
         var idCounter = 10000
-        _board.value = List(10) { row -> List(10) { col -> BoardSpace(row = row, col = col, card = getPlayingCardFromString(BOARD_LAYOUT[row][col], idCounter++)) } }
+        _board.value = List(10) { row -> 
+            List(10) { col -> 
+                BoardSpace(row = row, col = col, card = getPlayingCardFromString(BOARD_LAYOUT[row][col], idCounter++)) 
+            } 
+        }
+        
         val teams = if (requestedTeams == 2) listOf(TeamColor.BLUE, TeamColor.GREEN) else listOf(TeamColor.BLUE, TeamColor.GREEN, TeamColor.RED)
         players = List(totalPlayers) { index -> Player(id = index + 1, team = teams[index % requestedTeams], isCpu = index >= humans) }
+        
         val handSize = handSizeFor(totalPlayers)
-        repeat(handSize) { players = players.map { player -> player.copy(hand = player.hand + listOfNotNull(drawOneCard())) } }
+        repeat(handSize) { 
+            players = players.map { player -> player.copy(hand = player.hand + listOfNotNull(drawOneCard())) } 
+        }
+        
         _sequenceCounts.value = teams.associateWith { 0 }
         currentGameState = GameState.PLAYING
         gameMessage = if (requiredSequences == 2) "First team to complete 2 sequences wins. Player 1's turn." else "First team to complete 1 sequence wins. Player 1's turn."
+        
         if (currentPlayer.isCpu) startCpuTurn()
     }
     
     private fun buildTwoDecks(): List<PlayingCard> = buildList { 
         var id = 0
-        repeat(2) { for (suit in Suit.entries.filter { it != Suit.NONE }) { for (rank in Rank.entries.filter { it != Rank.CORNER }) { add(PlayingCard(suit, rank, id++)) } } } 
+        repeat(2) { 
+            for (suit in Suit.entries.filter { it != Suit.NONE }) { 
+                for (rank in Rank.entries.filter { it != Rank.CORNER }) { 
+                    add(PlayingCard(suit, rank, id++)) 
+                } 
+            } 
+        } 
     }
     
     private fun handSizeFor(totalPlayers: Int): Int = when (totalPlayers) { 2 -> 7; 3, 4 -> 6; 6 -> 5; 8, 9 -> 4; 10, 12 -> 3; else -> 3 }
@@ -356,7 +418,11 @@ class GameViewModel : ViewModel() {
             target.copy(occupant = movingPlayer.team, isHighlighted = false)
         }
         
-        _board.value = _board.value.mapIndexed { r, boardRow -> boardRow.mapIndexed { c, space -> if (r == row && c == col) newTarget else space.copy(isHighlighted = false) } }
+        _board.value = _board.value.mapIndexed { r, boardRow -> 
+            boardRow.mapIndexed { c, space -> 
+                if (r == row && c == col) newTarget else space.copy(isHighlighted = false) 
+            } 
+        }
         
         val newHand = movingPlayer.hand.filterNot { it.uniqueId == cardUsed.uniqueId }.toMutableList()
         drawOneCard()?.let(newHand::add)
@@ -381,7 +447,9 @@ class GameViewModel : ViewModel() {
         advanceTurn(turnSummary)
     }
     
-    private fun updatePlayer(updated: Player) { players = players.map { if (it.id == updated.id) updated else it } }
+    private fun updatePlayer(updated: Player) { 
+        players = players.map { if (it.id == updated.id) updated else it } 
+    }
     
     fun replaceSelectedDeadCard() {
         if (currentGameState != GameState.PLAYING || currentPlayer.isCpu) return
@@ -404,7 +472,9 @@ class GameViewModel : ViewModel() {
         checkForDraw()
     }
     
-    private fun clearHighlights() { _board.value = _board.value.map { row -> row.map { it.copy(isHighlighted = false) } } }
+    private fun clearHighlights() { 
+        _board.value = _board.value.map { row -> row.map { it.copy(isHighlighted = false) } } 
+    }
     
     private fun findCompletedLines(team: TeamColor): List<CompletedLine> {
         val directions = listOf(0 to 1, 1 to 0, 1 to 1, 1 to -1)
@@ -415,14 +485,23 @@ class GameViewModel : ViewModel() {
                 for ((dr, dc) in directions) {
                     val positions = (0 until 5).map { offset -> row + offset * dr to col + offset * dc }
                     if (positions.any { (r, c) -> r !in 0..9 || c !in 0..9 }) continue
-                    if (positions.all { (r, c) -> val space = _board.value[r][c]; space.card.rank == Rank.CORNER || space.occupant == team }) {
+                    
+                    if (positions.all { (r, c) -> 
+                        val space = _board.value[r][c]
+                        space.card.rank == Rank.CORNER || space.occupant == team 
+                    }) {
                         candidates += CompletedLine(team, positions.toSet())
                     }
                 } 
             } 
         }
+        
         val accepted = mutableListOf<CompletedLine>()
-        for (candidate in candidates) { if (accepted.all { previous -> candidate.positions.intersect(previous.positions).size <= 1 }) { accepted += candidate } }
+        for (candidate in candidates) { 
+            if (accepted.all { previous -> candidate.positions.intersect(previous.positions).size <= 1 }) {
+                accepted += candidate 
+            }
+        }
         return accepted
     }
     
@@ -433,14 +512,25 @@ class GameViewModel : ViewModel() {
         val protectedPositions = completed.flatMap { it.positions }.toSet()
         
         _sequenceCounts.value = _sequenceCounts.value.toMutableMap().apply { this[team] = newCount }
-        _board.value = _board.value.mapIndexed { row, boardRow -> boardRow.mapIndexed { col, space -> if (space.occupant == team && (row to col) in protectedPositions) { space.copy(isCompletedSequence = true) } else { space } } }
+        
+        _board.value = _board.value.mapIndexed { row, boardRow -> 
+            boardRow.mapIndexed { col, space -> 
+                if (space.occupant == team && (row to col) in protectedPositions) {
+                    space.copy(isCompletedSequence = true) 
+                } else {
+                    space 
+                }
+            } 
+        }
         
         if (newCount >= requiredSequences) { 
             winnerTeam = team
             currentGameState = GameState.FINISHED
             cpuJob?.cancel()
             return 2 
-        } else if (newCount > oldCount) { return 1 }
+        } else if (newCount > oldCount) {
+            return 1
+        }
         return 0
     }
     
@@ -497,7 +587,9 @@ class GameViewModel : ViewModel() {
             if (currentGameState != GameState.PLAYING || !currentPlayer.isCpu) return@launch
             
             val cpu = currentPlayer
-            val legalMoves = cpu.hand.flatMap { card -> _board.value.flatten().filter { isLegalDestination(card, it, cpu.team) }.map { space -> card to space } }
+            val legalMoves = cpu.hand.flatMap { card -> 
+                _board.value.flatten().filter { isLegalDestination(card, it, cpu.team) }.map { space -> card to space } 
+            }
             
             if (legalMoves.isNotEmpty()) { 
                 val (card, space) = legalMoves.random(random)
@@ -505,7 +597,9 @@ class GameViewModel : ViewModel() {
                 return@launch 
             }
             
-            val deadCard = cpu.hand.firstOrNull { card -> card.rank != Rank.J && _board.value.flatten().filter { it.card.matches(card) }.all { it.occupant != TeamColor.NONE } }
+            val deadCard = cpu.hand.firstOrNull { card -> 
+                card.rank != Rank.J && _board.value.flatten().filter { it.card.matches(card) }.all { it.occupant != TeamColor.NONE } 
+            }
             
             if (deadCard != null) { 
                 val newHand = cpu.hand.filterNot { it.uniqueId == deadCard.uniqueId }.toMutableList()
@@ -554,11 +648,19 @@ fun SetupScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     var teams by remember { mutableStateOf(2) }
     
     val supportedPlayers = listOf(2, 3, 4, 6, 8, 9, 10, 12)
-    val availableTeams = when (totalPlayers) { 3, 9 -> listOf(3); 6, 12 -> listOf(2, 3); else -> listOf(2) }
+    val availableTeams = when (totalPlayers) { 
+        3, 9 -> listOf(3)
+        6, 12 -> listOf(2, 3)
+        else -> listOf(2) 
+    }
     val effectiveTeams = if (teams in availableTeams) teams else availableTeams.first()
     val effectiveHumans = humans.coerceAtMost(totalPlayers)
     
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.fillMaxSize().padding(16.dp), 
+        verticalArrangement = Arrangement.Center, 
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(text = "Five Line Cards", fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(text = "Classic local play with optional CPU players", color = Color.Gray)
         Spacer(Modifier.height(24.dp))
@@ -566,8 +668,19 @@ fun SetupScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         Text(text = "Total players: $totalPlayers", fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { 
             supportedPlayers.forEach { count -> 
-                TextButton(onClick = { totalPlayers = count; humans = humans.coerceAtMost(count); teams = when (count) { 3, 9 -> 3 else -> if (teams == 3 && count !in listOf(6, 12)) 2 else teams } }) { 
-                    Text(text = count.toString(), color = if (count == totalPlayers) Color(0xFF1976D2) else Color.Gray, fontWeight = if (count == totalPlayers) FontWeight.Bold else FontWeight.Normal) 
+                TextButton(onClick = { 
+                    totalPlayers = count
+                    humans = humans.coerceAtMost(count)
+                    teams = when (count) { 
+                        3, 9 -> 3 
+                        else -> if (teams == 3 && count !in listOf(6, 12)) 2 else teams 
+                    } 
+                }) { 
+                    Text(
+                        text = count.toString(), 
+                        color = if (count == totalPlayers) Color(0xFF1976D2) else Color.Gray, 
+                        fontWeight = if (count == totalPlayers) FontWeight.Bold else FontWeight.Normal
+                    ) 
                 } 
             } 
         }
@@ -575,7 +688,12 @@ fun SetupScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         Text(text = "Teams: $effectiveTeams", fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { 
             availableTeams.forEach { count -> 
-                Button(onClick = { teams = count }, colors = ButtonDefaults.buttonColors(containerColor = if (effectiveTeams == count) Color(0xFF1976D2) else Color.Gray)) { Text(text = count.toString()) } 
+                Button(
+                    onClick = { teams = count }, 
+                    colors = ButtonDefaults.buttonColors(containerColor = if (effectiveTeams == count) Color(0xFF1976D2) else Color.Gray)
+                ) { 
+                    Text(text = count.toString()) 
+                } 
             } 
         }
         
@@ -584,27 +702,53 @@ fun SetupScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         Text(text = "Remaining players are CPU-controlled", fontSize = 12.sp, color = Color.Gray)
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { 
             (1..totalPlayers).forEach { count -> 
-                TextButton(onClick = { humans = count }) { Text(text = count.toString(), color = if (effectiveHumans == count) Color(0xFF1976D2) else Color.Gray) } 
+                TextButton(onClick = { humans = count }) { 
+                    Text(
+                        text = count.toString(), 
+                        color = if (effectiveHumans == count) Color(0xFF1976D2) else Color.Gray
+                    ) 
+                } 
             } 
         }
         
         Spacer(Modifier.height(24.dp))
-        Button(onClick = { gameViewModel.setupGame(totalPlayers, effectiveHumans, effectiveTeams) }, modifier = Modifier.fillMaxWidth(0.7f).height(52.dp)) { Text(text = "START GAME", fontSize = 17.sp) }
-        TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { Text(text = "Back to Main Menu", color = Color.Red) }
+        Button(
+            onClick = { gameViewModel.setupGame(totalPlayers, effectiveHumans, effectiveTeams) }, 
+            modifier = Modifier.fillMaxWidth(0.7f).height(52.dp)
+        ) { 
+            Text(text = "START GAME", fontSize = 17.sp) 
+        }
+        TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { 
+            Text(text = "Back to Main Menu", color = Color.Red) 
+        }
     }
 }
 
 @Composable
 fun PassDeviceScreen(gameViewModel: GameViewModel) {
     val next = gameViewModel.currentPlayer
-    Column(Modifier.fillMaxSize().background(next.team.uiColor.copy(alpha = 0.13f)).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.fillMaxSize().background(next.team.uiColor.copy(alpha = 0.13f)).padding(24.dp), 
+        verticalArrangement = Arrangement.Center, 
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(text = gameViewModel.gameMessage, color = Color.DarkGray, textAlign = TextAlign.Center)
         Spacer(Modifier.height(28.dp))
         Text(text = "Pass the device to", fontSize = 23.sp)
-        Text(text = "Player ${next.id}", fontSize = 46.sp, fontWeight = FontWeight.Bold, color = next.team.uiColor)
+        Text(
+            text = "Player ${next.id}", 
+            fontSize = 46.sp, 
+            fontWeight = FontWeight.Bold, 
+            color = next.team.uiColor
+        )
         Text(text = "Team ${next.team.name}", fontSize = 18.sp)
         Spacer(Modifier.height(40.dp))
-        Button(onClick = gameViewModel::confirmPassDevice, modifier = Modifier.fillMaxWidth(0.65f).height(58.dp)) { Text(text = "I'M READY", fontSize = 19.sp) }
+        Button(
+            onClick = gameViewModel::confirmPassDevice, 
+            modifier = Modifier.fillMaxWidth(0.65f).height(58.dp)
+        ) { 
+            Text(text = "I'M READY", fontSize = 19.sp) 
+        }
     }
 }
 
@@ -624,17 +768,30 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
                 val currentSeq = sequenceCounts[player.team] ?: 0
                 val targetSeq = if (gameViewModel.numberOfTeams == 2) 2 else 1
                 val seqStr = "$currentSeq/$targetSeq"
-                Text(text = seqStr, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = player.team.uiColor, modifier = Modifier.padding(end = 8.dp))
-                TextButton(onClick = onExit, contentPadding = PaddingValues(2.dp)) { Text(text = "Exit", fontSize = 12.sp, color = Color.Red) } 
+                Text(
+                    text = seqStr, 
+                    fontSize = 16.sp, 
+                    fontWeight = FontWeight.Bold, 
+                    color = player.team.uiColor, 
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                TextButton(onClick = onExit, contentPadding = PaddingValues(2.dp)) { 
+                    Text(text = "Exit", fontSize = 12.sp, color = Color.Red) 
+                } 
             }
         }
         
         if (board.isNotEmpty()) { 
+            // Fully dynamic grid replacement for offline board to prevent scrolling
             Column(Modifier.weight(1f).fillMaxWidth()) {
                 board.forEach { rowSpaces ->
                     Row(Modifier.weight(1f).fillMaxWidth()) {
                         rowSpaces.forEach { space ->
-                            BoardCard(space = space, modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { gameViewModel.humanPlaceToken(space.row, space.col) })
+                            BoardCard(
+                                space = space, 
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                onClick = { gameViewModel.humanPlaceToken(space.row, space.col) }
+                            )
                         }
                     }
                 }
@@ -645,7 +802,9 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         if (!player.isCpu) { 
             PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard, gameViewModel.gameMessage) 
         } else { 
-            Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { Text(text = "CPU cards are hidden", color = Color.Gray) } 
+            Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { 
+                Text(text = "CPU cards are hidden", color = Color.Gray) 
+            } 
         }
     }
 }
@@ -693,11 +852,30 @@ private fun BoardCard(space: BoardSpace, modifier: Modifier = Modifier, onClick:
             val cColor2 = chipBaseColor.copy(alpha = (chipAlpha - 0.2f).coerceAtLeast(0.1f))
             val chipBrush = Brush.radialGradient(listOf(cColor2, cColor1))
             
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).fillMaxWidth(0.68f).aspectRatio(1f).shadow(2.dp, CircleShape).clip(CircleShape).background(chipBrush).border(if (space.isCompletedSequence) 2.dp else 1.dp, if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), CircleShape)) { 
-                if (space.isCompletedSequence) { Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.White) } 
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp)
+                    .fillMaxWidth(0.68f)
+                    .aspectRatio(1f)
+                    .shadow(2.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(chipBrush)
+                    .border(
+                        if (space.isCompletedSequence) 2.dp else 1.dp, 
+                        if (space.isCompletedSequence) Color.White else Color.Black.copy(alpha = 0.65f), 
+                        CircleShape
+                    )
+            ) { 
+                if (space.isCompletedSequence) { 
+                    Text(text = "✓", Modifier.align(Alignment.Center), fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Color.White) 
+                } 
             } 
         }
-        if (space.isHighlighted) { Box(Modifier.align(Alignment.BottomEnd).padding(2.dp).size(6.dp).clip(CircleShape).background(Color(0xFF07852B))) }
+        
+        if (space.isHighlighted) { 
+            Box(Modifier.align(Alignment.BottomEnd).padding(2.dp).size(6.dp).clip(CircleShape).background(Color(0xFF07852B))) 
+        }
     }
 }
 
@@ -731,7 +909,9 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
                 enabled = selectedCardId != null,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 modifier = Modifier.height(32.dp)
-            ) { Text(text = "Replace selected dead card", fontSize = 10.sp) }
+            ) { 
+                Text(text = "Replace selected dead card", fontSize = 10.sp) 
+            }
             if (statusMessage.isNotEmpty()) {
                 Spacer(Modifier.width(8.dp))
                 Text(
@@ -756,10 +936,15 @@ fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
     val winner = gameViewModel.winnerTeam
     val background = if (gameViewModel.isDraw || winner == null) Color(0xFFE7E7E7) else winner.uiColor.copy(alpha = 0.15f)
     
-    Column(Modifier.fillMaxSize().background(background).padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.fillMaxSize().background(background).padding(24.dp), 
+        verticalArrangement = Arrangement.Center, 
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         val titleText = if (gameViewModel.isDraw) "DRAW" else "WINNER"
         Text(text = titleText, fontSize = 42.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
+        
         if (winner != null) { 
             Text(text = "Team ${winner.name}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = winner.uiColor)
             val countStr = "${counts[winner] ?: 0}"
@@ -767,11 +952,17 @@ fun FinishedScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         } else { 
             Text(text = "No legal moves remain.", fontSize = 20.sp, textAlign = TextAlign.Center) 
         }
+        
         Spacer(Modifier.height(16.dp))
         Text(text = gameViewModel.gameMessage, textAlign = TextAlign.Center, color = Color.DarkGray)
         Spacer(Modifier.height(32.dp))
-        Button(onClick = gameViewModel::newGame) { Text(text = "NEW GAME") }
-        TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { Text(text = "Back to Main Menu", color = Color.Red) }
+        
+        Button(onClick = gameViewModel::newGame) { 
+            Text(text = "NEW GAME") 
+        }
+        TextButton(onClick = onExit, modifier = Modifier.padding(top = 16.dp)) { 
+            Text(text = "Back to Main Menu", color = Color.Red) 
+        }
     }
 }
 
@@ -788,7 +979,9 @@ data class FBCard(val suit: String = "", val rank: String = "", val id: Int = 0)
     fun matches(other: FBCard): Boolean = suit == other.suit && rank == other.rank
 }
 
-data class FBSpace(val r: Int = 0, val c: Int = 0, val card: FBCard = FBCard(), val occupant: String = "NONE", var isCompletedSequence: Boolean = false)
+data class FBSpace(val r: Int = 0, val c: Int = 0, val card: FBCard = FBCard(), val occupant: String = "NONE", @field:JvmField var completedSequence: Boolean = false) {
+    val isCompletedSequence: Boolean get() = completedSequence
+}
 
 data class FBPlayer(
     val playerId: Int = 0, val playerName: String = "", val team: String = "Team1", 
@@ -1244,7 +1437,9 @@ class MultiplayerViewModel : ViewModel() {
                 } 
             }
             val accepted = mutableListOf<Set<Pair<Int, Int>>>()
-            for (cand in candidates) { if (accepted.all { prev -> cand.intersect(prev).size <= 1 }) accepted.add(cand) }
+            for (cand in candidates) { 
+                if (accepted.all { prev -> cand.intersect(prev).size <= 1 }) accepted.add(cand) 
+            }
             protectedPositions.addAll(accepted.flatten())
             if (accepted.size >= reqSeq && winningTeam == null) winningTeam = team
         }
@@ -1736,6 +1931,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     var showChat by remember { mutableStateOf(false) }
     val unreadCount = max(0, vm.getRelevantMessageCount() - vm.lastReadMessageCount)
     
+    // Central Play Animation State
     var centralCardToDisplay by remember { mutableStateOf<FBCard?>(null) }
     var animationTrigger by remember(room.lastPlayedCard) { mutableStateOf(room.lastPlayedCard) }
     
@@ -2222,7 +2418,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                                             }
                                         }
                                     }
-                                    TextButton(onClick = { vm.forceSync() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
+                                    TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
                                 }
                                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                                     TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }

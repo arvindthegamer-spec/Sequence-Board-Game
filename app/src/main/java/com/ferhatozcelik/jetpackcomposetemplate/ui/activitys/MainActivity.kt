@@ -1607,6 +1607,7 @@ class MultiplayerViewModel : ViewModel() {
     }
 
     private fun buildDeck(): List<FBCard> {
+        val secureRnd = SecureRandom()
         val initialList = mutableListOf<FBCard>()
         var id = 0
         repeat(2) {
@@ -1621,11 +1622,11 @@ class MultiplayerViewModel : ViewModel() {
         
         repeat(10) {
             val halfSize = currentDeck.size / 2
-            val half1 = currentDeck.take(halfSize).shuffled(Random.Default)
-            val half2 = currentDeck.drop(halfSize).shuffled(Random.Default)
+            val half1 = currentDeck.take(halfSize).shuffled(secureRnd)
+            val half2 = currentDeck.drop(halfSize).shuffled(secureRnd)
             
             val combined = half1 + half2
-            currentDeck = combined.shuffled(Random.Default)
+            currentDeck = combined.shuffled(secureRnd)
         }
         
         return currentDeck
@@ -1733,6 +1734,89 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
 // ==============================================================================
 // ONLINE SCREENS
 // ==============================================================================
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
+    when (viewModel.currentAppState) {
+        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
+        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
+        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
+        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
+        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
+        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
+    }
+}
+
+@Composable
+fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(text = "Online Multiplayer", fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 32.dp))
+        Button(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME; vm.lobbyError = "" }, modifier = Modifier.fillMaxWidth(0.6f).padding(8.dp)) { 
+            Text(text = "Play Online") 
+        }
+        TextButton(onClick = onExit, modifier = Modifier.padding(top = 32.dp)) { 
+            Text(text = "Back to Main Menu", color = Color.Red) 
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnlineEnterNameScreen(vm: MultiplayerViewModel) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("SeqPrefs", Context.MODE_PRIVATE)
+    var nameInput by remember { mutableStateOf(prefs.getString("saved_name", "") ?: "") }
+    
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(text = "Enter Your Name", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = nameInput, onValueChange = { nameInput = it }, label = { Text(text = "Display Name") }, modifier = Modifier.padding(vertical = 16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.proceedToCreate(nameInput, context) }) { Text(text = "Create Room") }
+            Button(onClick = { vm.proceedToJoin(nameInput, context) }) { Text(text = "Join Room") }
+        }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.LOBBY }) { Text(text = "Back") }
+        if (vm.lobbyError.isNotEmpty()) {
+            Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnlineCreateScreen(vm: MultiplayerViewModel) {
+    var password by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        val rc = vm.roomCode
+        Text(text = "Room Code: $rc", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Optional Password") }, modifier = Modifier.padding(vertical = 8.dp))
+        Spacer(Modifier.height(32.dp))
+        Button(onClick = { vm.executeCreateRoom(password, context) }) { Text(text = "Open Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text(text = "Cancel") }
+        if (vm.lobbyError.isNotEmpty()) {
+            Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnlineJoinScreen(vm: MultiplayerViewModel) {
+    var code by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(text = "Join Friend's Room", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = code, onValueChange = { code = it }, label = { Text(text = "4-Digit Room Code") })
+        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(text = "Password (if any)") }, modifier = Modifier.padding(vertical = 12.dp))
+        Button(onClick = { vm.joinRoom(code, password) }) { Text(text = "Join Lobby") }
+        TextButton(onClick = { vm.currentAppState = OnlineAppState.ENTER_NAME }) { Text(text = "Cancel") }
+        if (vm.lobbyError.isNotEmpty()) {
+            Text(text = vm.lobbyError, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
 @Composable
 fun OnlineWaitingScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     val room by vm.roomData.collectAsState()

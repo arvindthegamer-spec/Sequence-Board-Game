@@ -430,15 +430,15 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
         
         var turnSummary = when { 
-            cardUsed.isOneEyedJack -> "Player ${movingPlayer.id} used a Remove Jack."
-            cardUsed.isTwoEyedJack -> "Player ${movingPlayer.id} used a Wild Jack."
-            else -> "Player ${movingPlayer.id} placed ${cardUsed.rank.text}${cardUsed.suit.symbol}." 
+            cardUsed.isOneEyedJack -> "Player ${movingPlayer.id} used a Remove Jack,"
+            cardUsed.isTwoEyedJack -> "Player ${movingPlayer.id} used a Wild Jack,"
+            else -> "Player ${movingPlayer.id} placed a chip," 
         }
         
         if (!cardUsed.isOneEyedJack) {
             val seqResult = updateSequencesAndCheckWinner(movingPlayer.team)
             if (seqResult == 1) {
-                turnSummary += " Sequence completed!" 
+                // optional: turnSummary += " Sequence completed!"
             } else if (seqResult == 2) { 
                 gameMessage = "$turnSummary Team ${movingPlayer.team.name} wins!"
                 return 
@@ -469,8 +469,8 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
         clearHighlights()
         
-        val msg = "Player ${currentPlayer.id} replaced a dead card."
-        gameMessage = "$msg Player ${currentPlayer.id}'s turn."
+        val msg = "Player ${currentPlayer.id} replaced a dead card,"
+        advanceTurn(msg)
         checkForDraw()
     }
     
@@ -560,10 +560,10 @@ class GameViewModel : ViewModel() {
         _selectedCardId.value = null
         clearHighlights()
         
-        val p = if (prefix.isNotEmpty()) "$prefix " else ""
+        val p = if (prefix.isNotEmpty()) "$prefix now " else ""
         if (currentPlayer.isCpu) { 
             currentGameState = GameState.PLAYING
-            gameMessage = "${p}CPU ${currentPlayer.id} is thinking..."
+            gameMessage = "${p}CPU ${currentPlayer.id}'s turn"
             startCpuTurn() 
         }
         else if (humanCount > 1) { 
@@ -572,7 +572,7 @@ class GameViewModel : ViewModel() {
         }
         else { 
             currentGameState = GameState.PLAYING
-            gameMessage = "${p}Player ${currentPlayer.id}'s turn." 
+            gameMessage = "${p}Player ${currentPlayer.id}'s turn" 
         }
     }
     
@@ -607,13 +607,13 @@ class GameViewModel : ViewModel() {
                 val newHand = cpu.hand.filterNot { it.uniqueId == deadCard.uniqueId }.toMutableList()
                 drawOneCard()?.let(newHand::add)
                 updatePlayer(cpu.copy(hand = newHand))
-                val msg = "CPU ${cpu.id} replaced a dead card."
+                val msg = "CPU ${cpu.id} replaced a dead card,"
                 if (!checkForDraw(msg)) { 
-                    gameMessage = "$msg CPU ${cpu.id} is thinking..."
+                    gameMessage = "$msg now CPU ${cpu.id} is thinking..."
                     startCpuTurn() 
                 }
             } else if (!checkForDraw()) {
-                advanceTurn("CPU ${cpu.id} has no legal move.")
+                advanceTurn("CPU ${cpu.id} has no legal move,")
             }
         }
     }
@@ -784,6 +784,7 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         }
         
         if (board.isNotEmpty()) { 
+            // Fully dynamic grid replacement for offline board to prevent scrolling
             Column(Modifier.weight(1f).fillMaxWidth()) {
                 board.forEach { rowSpaces ->
                     Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -801,8 +802,6 @@ fun GameScreen(gameViewModel: GameViewModel, onExit: () -> Unit = {}) {
         
         Spacer(Modifier.height(4.dp))
         if (!player.isCpu) { 
-            val hintString = if (selectedCardId == null) "Select a card to show legal moves" else "Green spaces are legal moves"
-            Text(text = hintString, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF087F23))
             PlayerHand(player, selectedCardId, gameViewModel::selectCard, gameViewModel::replaceSelectedDeadCard, gameViewModel.gameMessage) 
         } else { 
             Box(Modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) { 
@@ -907,8 +906,13 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onReplaceDeadCard, enabled = selectedCardId != null) { 
-                Text(text = "Replace selected dead card", fontSize = 11.sp) 
+            OutlinedButton(
+                onClick = onReplaceDeadCard, 
+                enabled = selectedCardId != null,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                modifier = Modifier.height(32.dp)
+            ) { 
+                Text(text = "Replace selected dead card", fontSize = 10.sp) 
             }
             if (statusMessage.isNotEmpty()) {
                 Spacer(Modifier.width(8.dp))
@@ -916,9 +920,9 @@ private fun PlayerHand(player: Player, selectedCardId: Int?, onSelect: (Int) -> 
                     text = statusMessage, 
                     fontWeight = FontWeight.Bold, 
                     color = player.team.uiColor, 
-                    fontSize = 12.sp, 
-                    lineHeight = 14.sp,
-                    maxLines = 1, 
+                    fontSize = 11.sp, 
+                    lineHeight = 13.sp,
+                    maxLines = 3, 
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.End
@@ -1004,18 +1008,6 @@ data class GameRoom(
 )
 
 enum class OnlineAppState { LOBBY, ENTER_NAME, CREATE_ROOM, JOIN_ROOM, WAITING_ROOM, PLAYING }
-
-@Composable
-fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
-    when (viewModel.currentAppState) {
-        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
-        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
-        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
-    }
-}
 
 class MultiplayerViewModel : ViewModel() {
     private val db = Firebase.database.reference
@@ -2088,7 +2080,7 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
-            // New Clean Top Bar Layout
+            // New Clean Top Bar Layout (Message logic moved to bottom)
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 // Left side: Room Info
                 Column(Modifier.weight(1f)) {
@@ -2265,17 +2257,22 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
                 
                 // Status Message moved next to Replace Card button
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = { selectedCard?.let { vm.replaceDeadCard(it) }; selectedCard = null }, enabled = selectedCard != null && isMyTurn) { 
-                        Text(text = "Replace selected dead card", fontSize = 11.sp) 
+                    OutlinedButton(
+                        onClick = { selectedCard?.let { vm.replaceDeadCard(it) }; selectedCard = null }, 
+                        enabled = selectedCard != null && isMyTurn,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) { 
+                        Text(text = "Replace selected dead card", fontSize = 10.sp) 
                     }
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = room.message, 
                         fontWeight = FontWeight.Bold, 
                         color = if (isMyTurn) Color(0xFF07852B) else Color.DarkGray, 
-                        fontSize = 12.sp, 
-                        lineHeight = 14.sp,
-                        maxLines = 1, 
+                        fontSize = 11.sp, 
+                        lineHeight = 13.sp,
+                        maxLines = 3, 
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End

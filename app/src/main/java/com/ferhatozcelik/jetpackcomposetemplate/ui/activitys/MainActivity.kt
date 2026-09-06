@@ -22,9 +22,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -482,7 +484,7 @@ class GameViewModel : ViewModel() {
         for (row in 0 until 10) { 
             for (col in 0 until 10) { 
                 for ((dr, dc) in directions) {
-                    val positions = (0 until 5).map { offset -> row + dr * offset to col + dc * offset }
+                    val positions = (0 until 5).map { offset -> row + offset * dr to col + offset * dc }
                     if (positions.any { (r, c) -> r !in 0..9 || c !in 0..9 }) continue
                     
                     if (positions.all { (r, c) -> 
@@ -1734,19 +1736,6 @@ fun ChatDialog(vm: MultiplayerViewModel, onDismiss: () -> Unit) {
 // ==============================================================================
 // ONLINE SCREENS
 // ==============================================================================
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun OnlineSequenceApp(onExit: () -> Unit, viewModel: MultiplayerViewModel = viewModel()) {
-    when (viewModel.currentAppState) {
-        OnlineAppState.LOBBY -> OnlineLobbyScreen(viewModel, onExit)
-        OnlineAppState.ENTER_NAME -> OnlineEnterNameScreen(viewModel)
-        OnlineAppState.CREATE_ROOM -> OnlineCreateScreen(viewModel)
-        OnlineAppState.JOIN_ROOM -> OnlineJoinScreen(viewModel)
-        OnlineAppState.WAITING_ROOM -> OnlineWaitingScreen(viewModel, onExit)
-        OnlineAppState.PLAYING -> OnlineGameScreen(viewModel, onExit)
-    }
-}
-
 @Composable
 fun OnlineLobbyScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -2247,172 +2236,183 @@ fun OnlineGameScreen(vm: MultiplayerViewModel, onExit: () -> Unit) {
         if (room.status == "FINISHED") {
             if (showScorecard) {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable(enabled=false){}, contentAlignment = Alignment.Center) {
-                    Card(Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.9f).padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            val winStr = "${room.winnerTeam} WINS MATCH ${room.matchNumber}!"
-                            Text(text = winStr, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]))
-                            if(room.consecutiveWins >= 3 && room.lastWinningTeam == room.winnerTeam) {
-                                Text(text = "HAT-TRICK WINNER!", fontSize = 18.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                    Card(Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.95f).padding(8.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.fillMaxSize().padding(12.dp)) {
+                            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                val winStr = "${room.winnerTeam} WINS MATCH ${room.matchNumber}!"
+                                Text(text = winStr, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(room.teamColors[room.winnerTeam] ?: TEAM_COLORS[0]), textAlign = TextAlign.Center)
+                                if(room.consecutiveWins >= 3 && room.lastWinningTeam == room.winnerTeam) {
+                                    Text(text = "HAT-TRICK WINNER!", fontSize = 18.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                                }
                             }
-                            Spacer(Modifier.height(16.dp))
                             
-                            Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            LazyColumn(Modifier.fillMaxWidth().weight(0.8f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                                item { 
+                            Spacer(Modifier.height(12.dp))
+                            
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                Text(text = "Player Stats", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                                Column(Modifier.fillMaxWidth().border(1.dp, Color.LightGray).padding(4.dp)) {
                                     Row(Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) { 
                                         Text(text = "Player", Modifier.weight(1f), fontSize=12.sp)
                                         Text(text = "Time", Modifier.weight(0.6f), fontSize=12.sp)
                                         Text(text = "Wild", Modifier.weight(0.4f), fontSize=12.sp)
                                         Text(text = "Rem", Modifier.weight(0.4f), fontSize=12.sp) 
                                     } 
-                                }
-                                items(room.players) { p -> 
-                                    Row(Modifier.fillMaxWidth().padding(4.dp)) { 
-                                        Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0]))
-                                        val tSecs = p.timePlayedMs / 1000
-                                        val hr = tSecs / 3600
-                                        val min = (tSecs % 3600) / 60
-                                        val sec = tSecs % 60
-                                        val timeStr = if (hr > 0) String.format("%02d:%02d:%02d", hr, min, sec) else String.format("%02d:%02d", min, sec)
-                                        Text(text = timeStr, Modifier.weight(0.6f), fontSize=12.sp) 
-                                        val wStr = "${p.wildUsed}"
-                                        Text(text = wStr, Modifier.weight(0.4f), fontSize=12.sp) 
-                                        val rStr = "${p.removeUsed}"
-                                        Text(text = rStr, Modifier.weight(0.4f), fontSize=12.sp) 
-                                    } 
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            LazyColumn(Modifier.fillMaxWidth().weight(0.4f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                                items(room.matchHistory) { h -> Text(text = h, fontSize = 12.sp, modifier = Modifier.padding(2.dp)) }
-                            }
-
-                            if (vm.playerName == room.hostName) {
-                                Spacer(Modifier.height(8.dp))
-                                Text(text = "Host: Manage Next Match", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-                                    Text(text = "Teams:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Spacer(Modifier.width(8.dp))
-                                    listOf(2, 3).forEach { tCount -> 
-                                        Button(
-                                            onClick = { vm.changeTotalTeams(tCount) }, 
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (room.numberOfTeams == tCount) Color(0xFF1976D2) else Color.Gray),
-                                            modifier = Modifier.padding(horizontal = 4.dp).height(28.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                                        ) { 
-                                            Text(text = tCount.toString(), fontSize = 11.sp) 
+                                    room.players.forEach { p -> 
+                                        Row(Modifier.fillMaxWidth().padding(4.dp)) { 
+                                            Text(text = p.playerName, Modifier.weight(1f), fontSize=12.sp, color=Color(room.teamColors[p.team] ?: TEAM_COLORS[0]))
+                                            val tSecs = p.timePlayedMs / 1000
+                                            val hr = tSecs / 3600
+                                            val min = (tSecs % 3600) / 60
+                                            val sec = tSecs % 60
+                                            val timeStr = if (hr > 0) String.format("%02d:%02d:%02d", hr, min, sec) else String.format("%02d:%02d", min, sec)
+                                            Text(text = timeStr, Modifier.weight(0.6f), fontSize=12.sp) 
+                                            val wStr = "${p.wildUsed}"
+                                            Text(text = wStr, Modifier.weight(0.4f), fontSize=12.sp) 
+                                            val rStr = "${p.removeUsed}"
+                                            Text(text = rStr, Modifier.weight(0.4f), fontSize=12.sp) 
                                         } 
                                     }
                                 }
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                                    Text(text = "Timer:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Spacer(Modifier.width(8.dp))
-                                    Checkbox(
-                                        checked = room.timerEnabled, 
-                                        onCheckedChange = { vm.updateTimerSettings(it, room.timerDurationSecs, context) }
-                                    )
-                                    if (room.timerEnabled) {
-                                        var tVal by remember(room.timerDurationSecs) { mutableStateOf(room.timerDurationSecs.toString()) }
-                                        BasicTextField(
-                                            value = tVal,
-                                            onValueChange = { newVal -> 
-                                                tVal = newVal
-                                                newVal.toIntOrNull()?.let { num -> if(num > 0) vm.updateTimerSettings(true, num, context) }
-                                            },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            modifier = Modifier.width(40.dp).background(Color.White).border(1.dp, Color.Gray).padding(4.dp),
-                                            textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
-                                        )
-                                        Text(text = "s", fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
-                                    }
+                                
+                                Spacer(Modifier.height(12.dp))
+                                Text(text = "Match History", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                                Column(Modifier.fillMaxWidth().border(1.dp, Color.LightGray).padding(4.dp)) {
+                                    room.matchHistory.forEach { h -> Text(text = h, fontSize = 12.sp, modifier = Modifier.padding(2.dp)) }
                                 }
-                                LazyColumn(Modifier.fillMaxWidth().weight(0.6f).border(1.dp, Color.LightGray).padding(4.dp)) {
-                                    items(room.players) { p ->
-                                        val isOnline = room.presence[p.playerName] == true
-                                        val teamCol = Color(room.teamColors[p.team] ?: TEAM_COLORS[0])
-                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                                            Box(Modifier.size(12.dp).clip(CircleShape).background(teamCol).border(1.dp, Color.Black, CircleShape).clickable { vm.cycleTeamColor(p.team) })
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(text = p.playerName, fontSize = 11.sp, color = if (isOnline) teamCol else Color.Gray, modifier = Modifier.weight(1f))
-                                            if (!isOnline) {
-                                                Text(text = "(Offline)", fontSize = 9.sp, color = Color.Red, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 4.dp))
-                                            }
-                                            if (p.playerName != vm.playerName) {
-                                                Button(onClick = { vm.changePlayerTeam(p.playerId) }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { 
-                                                    Text(text = "Team", fontSize = 9.sp) 
-                                                }
+
+                                if (vm.playerName == room.hostName) {
+                                    Spacer(Modifier.height(12.dp))
+                                    Text(text = "Host: Manage Next Match", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                                        Text(text = "Teams:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Spacer(Modifier.width(8.dp))
+                                        listOf(2, 3).forEach { tCount -> 
+                                            Button(
+                                                onClick = { vm.changeTotalTeams(tCount) }, 
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (room.numberOfTeams == tCount) Color(0xFF1976D2) else Color.Gray),
+                                                modifier = Modifier.padding(horizontal = 4.dp).height(28.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                            ) { 
+                                                Text(text = tCount.toString(), fontSize = 11.sp) 
+                                            } 
+                                        }
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                        Text(text = "Timer:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Checkbox(
+                                            checked = room.timerEnabled, 
+                                            onCheckedChange = { vm.updateTimerSettings(it, room.timerDurationSecs, context) }
+                                        )
+                                        if (room.timerEnabled) {
+                                            var tVal by remember(room.timerDurationSecs) { mutableStateOf(room.timerDurationSecs.toString()) }
+                                            BasicTextField(
+                                                value = tVal,
+                                                onValueChange = { newVal -> 
+                                                    tVal = newVal
+                                                    newVal.toIntOrNull()?.let { num -> if(num > 0) vm.updateTimerSettings(true, num, context) }
+                                                },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                modifier = Modifier.width(40.dp).background(Color.White).border(1.dp, Color.Gray).padding(4.dp),
+                                                textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+                                            )
+                                            Text(text = "s", fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Column(Modifier.fillMaxWidth().border(1.dp, Color.LightGray).padding(4.dp)) {
+                                        room.players.forEach { p ->
+                                            val isOnline = room.presence[p.playerName] == true
+                                            val teamCol = Color(room.teamColors[p.team] ?: TEAM_COLORS[0])
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                                                Box(Modifier.size(12.dp).clip(CircleShape).background(teamCol).border(1.dp, Color.Black, CircleShape).clickable { vm.cycleTeamColor(p.team) })
                                                 Spacer(Modifier.width(4.dp))
-                                                Button(onClick = { vm.kickPlayer(p.playerId) }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.height(24.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { 
-                                                    Text(text = "X", fontSize = 9.sp) 
+                                                Text(text = p.playerName, fontSize = 11.sp, color = if (isOnline) teamCol else Color.Gray, modifier = Modifier.weight(1f))
+                                                if (!isOnline) {
+                                                    Text(text = "(Offline)", fontSize = 9.sp, color = Color.Red, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 4.dp))
+                                                }
+                                                if (p.playerName != vm.playerName) {
+                                                    Button(onClick = { vm.changePlayerTeam(p.playerId) }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { 
+                                                        Text(text = "Team", fontSize = 9.sp) 
+                                                    }
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Button(onClick = { vm.kickPlayer(p.playerId) }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), modifier = Modifier.height(24.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { 
+                                                        Text(text = "X", fontSize = 9.sp) 
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                                Spacer(Modifier.height(8.dp))
                             }
 
-                            Spacer(Modifier.height(8.dp))
-                            
-                            val pendingPlayers = room.players.filter { room.rematchVotes[it.playerName] != true }
-                            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-                                room.players.forEach { p ->
-                                    val isReady = room.rematchVotes[p.playerName] == true
-                                    val bColor = Color(room.teamColors[p.team] ?: TEAM_COLORS[0])
-                                    Box(
-                                        modifier = Modifier.size(16.dp).background(if (isReady) bColor else Color.LightGray, MaterialTheme.shapes.small)
-                                            .border(1.dp, Color.Black, MaterialTheme.shapes.small)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                Divider(Modifier.padding(bottom = 8.dp))
+                                val pendingPlayers = room.players.filter { room.rematchVotes[it.playerName] != true }
+                                Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                                    room.players.forEach { p ->
+                                        val isReady = room.rematchVotes[p.playerName] == true
+                                        val bColor = Color(room.teamColors[p.team] ?: TEAM_COLORS[0])
+                                        Box(
+                                            modifier = Modifier.size(16.dp).background(if (isReady) bColor else Color.LightGray, MaterialTheme.shapes.small)
+                                                .border(1.dp, Color.Black, MaterialTheme.shapes.small)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
                                 }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            if (pendingPlayers.isNotEmpty()) {
-                                val names = pendingPlayers.map { it.playerName }
-                                val verb = if (names.size == 1) "is" else "are"
-                                val waitStr = "${names.joinToString(", ")} $verb yet to join for rematch."
-                                Text(text = waitStr, fontSize = 11.sp, color = Color.Gray, textAlign = TextAlign.Center)
-                            }
-                            Spacer(Modifier.height(8.dp))
+                                Spacer(Modifier.height(4.dp))
+                                if (pendingPlayers.isNotEmpty()) {
+                                    val names = pendingPlayers.map { it.playerName }
+                                    val verb = if (names.size == 1) "is" else "are"
+                                    val waitStr = "${names.joinToString(", ")} $verb yet to join for rematch."
+                                    Text(text = waitStr, fontSize = 11.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                                }
+                                Spacer(Modifier.height(8.dp))
 
-                            if (room.message.contains("Cannot start")) {
-                                Text(text = room.message, color = Color.Red, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(4.dp))
-                            }
+                                if (room.message.contains("Cannot start")) {
+                                    Text(text = room.message, color = Color.Red, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(4.dp).fillMaxWidth())
+                                }
 
-                            if(room.rematchVotes[vm.playerName] != true) {
-                                val readyStr = "Ready for Match ${room.matchNumber+1}"
-                                Button(onClick = { vm.voteRematch(true) }) { Text(text = readyStr) }
-                            } else { 
-                                Text(text = "Waiting for Host...", color = Color.Gray, fontWeight = FontWeight.Bold) 
-                            }
-                            
-                            if(vm.playerName == room.hostName) {
+                                if(room.rematchVotes[vm.playerName] != true) {
+                                    val readyStr = "Ready for Match ${room.matchNumber+1}"
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                                        Button(onClick = { vm.voteRematch(true) }) { Text(text = readyStr) }
+                                    }
+                                } else { 
+                                    Text(text = "Waiting for Host...", color = Color.Gray, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) 
+                                }
+                                
+                                if(vm.playerName == room.hostName) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                        Button(onClick = { vm.hostManualShuffle() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))) { 
+                                            Text(text = "Shuffle Deck") 
+                                        }
+                                        Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
+                                            Text(text = "Start Next Match") 
+                                        }
+                                    }
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                                    Button(onClick = { vm.hostManualShuffle() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))) { 
-                                        Text(text = "Shuffle Deck") 
-                                    }
-                                    Button(onClick = { vm.hostStartRematch() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF07852B))) { 
-                                        Text(text = "Host: Start Next Match") 
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                                TextButton(onClick = { showChat = true; vm.lastReadMessageCount = vm.getRelevantMessageCount() }) { 
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("💬 Chat", color = Color(0xFF00ACC1))
-                                        if (unreadCount > 0) {
-                                            Spacer(Modifier.width(4.dp))
-                                            Box(modifier = Modifier.size(18.dp).background(Color.Red, CircleShape), contentAlignment = Alignment.Center) {
-                                                Text(text = "$unreadCount", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    TextButton(onClick = { showChat = true; vm.lastReadMessageCount = vm.getRelevantMessageCount() }) { 
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("💬 Chat", color = Color(0xFF00ACC1))
+                                            if (unreadCount > 0) {
+                                                Spacer(Modifier.width(4.dp))
+                                                Box(modifier = Modifier.size(18.dp).background(Color.Red, CircleShape), contentAlignment = Alignment.Center) {
+                                                    Text(text = "$unreadCount", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
                                             }
                                         }
                                     }
+                                    TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
                                 }
-                                TextButton(onClick = { vm.syncPresence() }) { Text(text = "Sync Status", color = Color(0xFF1976D2)) }
-                                TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }
-                                TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
+                                Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                    TextButton(onClick = { showScorecard = false }) { Text(text = "View Board", color = Color(0xFFE65100)) }
+                                    TextButton(onClick = { vm.backToLobby(); onExit() }) { Text(text = "Leave Room", color = Color.Red) }
+                                }
                             }
                         }
                     }
